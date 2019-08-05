@@ -1262,7 +1262,7 @@
 
 ;;; QR Factorization
 
-(define-lapack dgeqrf_ 
+(define-lapack dgeqrfp_ 
   ; Compute A = Q*R  
   ; Use dorgqr to generate matrix from output
   (_fun (m : (_ptr i _int)) ; rows in A
@@ -1300,9 +1300,9 @@
   (define work (make-flmatrix lwork 1))
   (define awork (flmatrix-a work))
   ; TODO: Use lwork=-1 to get optimal lwork size
-  (define info (dgeqrf_ m n a lda atau awork lwork))
+  (define info (dgeqrfp_ m n a lda atau awork lwork))
   (define R (flmatrix-extract-upper A))
-  (define info1 (dorgqr_ m n k a lda atau awork lwork))  
+  (define info1 (dorgqr_ m n k a lda atau awork lwork))
   ; ? TODO: what to do with info
   (values A R))
 
@@ -2097,11 +2097,12 @@
    (with-check-info
     (['test-case 'unit-vector])
     (check-equal? (flcolumn-unit 4 1) (flcolumn 0 1 0 0)))
-   (with-check-info (['test-case 'flmatrix-qr])
-                    (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
-                      (check-equal? (list Q R)
-                                    (list (flmatrix/dim 3 2  0.7071067811865475 0 0 1 0.7071067811865475 0)
-                                          (flmatrix/dim 2 2  1.414213562373095 1.414213562373095 0 1)))))
+   (with-check-info
+    (['test-case 'flmatrix-qr])
+    (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
+      (check-equal? (list Q R)
+                    (list (flmatrix/dim 3 2  0.7071067811865475 0 0 1 0.7071067811865475 0)
+                          (flmatrix/dim 2 2  1.414213562373095 1.414213562373095 0 1)))))
    (with-check-info
     (['test-case 'flmatrix-solve])
     (let* ([M (list->flmatrix '[[1 5] [2 3]])] 
