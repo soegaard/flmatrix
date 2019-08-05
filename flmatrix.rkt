@@ -60,19 +60,34 @@
 ; CBLAS and LAPACK are used.
 ; The first two are C-based whereas LAPACK is Fortran based.
 
-(define veclib-lib 
-  ; OS X: Contains CBLAS both CATLAS. CATLAS is not used here.
-  ; https://developer.apple.com/library/mac/#documentation/Accelerate/
-  ;         Reference/BLAS_Ref/Reference/reference.html
-  (ffi-lib "/System/Library/Frameworks/vecLib.framework/Versions/Current/vecLib"))
+;; Find placement of libraries.
 
-(define cblas-lib veclib-lib)
+(define-values (cblas-lib lapack-lib)
+  (case (system-type)
+    ; MACOS
+    [(macosx)
+     (define veclib-lib 
+       ; OS X: Contains CBLAS both CATLAS. CATLAS is not used here.
+       ; https://developer.apple.com/library/mac/#documentation/Accelerate/
+       ;         Reference/BLAS_Ref/Reference/reference.html
+       (ffi-lib "/System/Library/Frameworks/vecLib.framework/Versions/Current/vecLib"))     
+     (define cblas-lib veclib-lib)
+     (define lapack-lib
+       (ffi-lib 
+        (string-append
+         "/System/Library/Frameworks/Accelerate.framework/"
+         "Versions/A/Frameworks/vecLib.framework/Versions/A/libLAPACK")))
+     (values cblas-lib lapack-lib)]
+    ; UNIX
+    [(unix)
+     (define cblas-lib  (ffi-lib "libblas"   '("3" #f)))  ; works on debian
+     (define lapack-lib (ffi-lib "liblapack" '("3" #f)))  ; works on debian
+     (values cblas-lib lapack-lib)]
+    [(windows)
+     ; tester needed
+     (error 'tester-needed)]))
 
-(define lapack-lib
-  (ffi-lib 
-   (string-append
-    "/System/Library/Frameworks/Accelerate.framework/"
-    "Versions/A/Frameworks/vecLib.framework/Versions/A/libLAPACK")))
+;;; Load libraries
 
 (define-ffi-definer define-cblas  cblas-lib)
 (define-ffi-definer define-lapack lapack-lib)
