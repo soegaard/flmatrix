@@ -1886,308 +1886,339 @@
 ;;;
 
 
-#;(
-(define (flequal? a b)
-  (< (abs (- b a)) 0.00001))
+(module+ test
+  (require rackunit)
+  
+  (define (flcheck-equal? a b)
+    (< (abs (- b a)) 0.00001))
+  
 
-"flmatrix/dim"
-(equal? (flmatrix->vector (flmatrix/dim 2 2 1 2 3 4))
-        #(1. 2. 3. 4.))
-(equal? (flmatrix->vector (vector->flmatrix 2 2 #(1 2 3 4)))
-        #(1. 2. 3. 4.))
-(equal? (flmatrix->vector (flmatrix/dim 2 2 1 2 3 4))
-        #(1. 2. 3. 4.))
-(equal? (flmatrix->vectors (flmatrix/dim 2 2 1 2 3 4))
-        #(#[1. 2.] #[3. 4.]))
+  (with-check-info
+   (['test-case "flmatrix/dim"])
+   (check-equal? (flmatrix->vector (flmatrix/dim 2 2 1 2 3 4))
+                 #(1. 2. 3. 4.))
+   (check-equal? (flmatrix->vector (vector->flmatrix 2 2 #(1 2 3 4)))
+                 #(1. 2. 3. 4.))
+   (check-equal? (flmatrix->vector (flmatrix/dim 2 2 1 2 3 4))
+                 #(1. 2. 3. 4.))
+   (check-equal? (flmatrix->vectors (flmatrix/dim 2 2 1 2 3 4))
+                 #(#[1. 2.] #[3. 4.]))
 
-(let ()
-  (define A  (flmatrix/dim 2 2 1 2 3 4))
-  (define B  (flmatrix/dim 2 2 5 6 7 8))
-  (define AB (flmatrix/dim 2 2 19 22 43 50))
-  (equal? (flmatrix->vectors (flmatrix* A B))
-          (flmatrix->vectors AB)))
+   (let ()
+     (define A  (flmatrix/dim 2 2 1 2 3 4))
+     (define B  (flmatrix/dim 2 2 5 6 7 8))
+     (define AB (flmatrix/dim 2 2 19 22 43 50))
+     (check-equal? (flmatrix->vectors (flmatrix* A B))
+                   (flmatrix->vectors AB)))
 
-(let ()
-  (define C  (flmatrix/dim 2 2 1 2 3 4))
-  (define D  (flmatrix/dim 2 3 5 6 7 8 9 10))
-  (define CD (flmatrix/dim 2 3 21 24 27 47 54 61))
-  (equal? (flmatrix->vectors (flmatrix* C D))
-          (flmatrix->vectors CD)))
+   (let ()
+     (define C  (flmatrix/dim 2 2 1 2 3 4))
+     (define D  (flmatrix/dim 2 3 5 6 7 8 9 10))
+     (define CD (flmatrix/dim 2 3 21 24 27 47 54 61))
+     (check-equal? (flmatrix->vectors (flmatrix* C D))
+                   (flmatrix->vectors CD)))
 
-(equal? (flmatrix->vectors 
-         (flmatrix* (flmatrix/dim 2 3 0 0 1 0 0 0)
-                    (flmatrix/dim 3 2 1 2 3 4 5 6)))
-        (flmatrix->vectors 
-         (flmatrix/dim 2 2 5 6 0 0)))
+   (check-equal? (flmatrix->vectors 
+                  (flmatrix* (flmatrix/dim 2 3 0 0 1 0 0 0)
+                             (flmatrix/dim 3 2 1 2 3 4 5 6)))
+                 (flmatrix->vectors 
+                  (flmatrix/dim 2 2 5 6 0 0))))
 
 
-(begin  
-  (begin "matrix-constructors.rkt"
-         (list
-          'flmatrix-identity
-          (equal? (flmatrix->lists (flmatrix-identity 1)) '[[1.]])
-          (equal? (flmatrix->lists (flmatrix-identity 2)) '[[1. 0.] [0. 1.]])
-          (equal? (flmatrix->lists (flmatrix-identity 3)) '[[1. 0. 0.] [0. 1. 0.] [0. 0. 1.]]) 
-          (equal? (flmatrix->lists (flmatrix-identity 1)) '[[1.]])
-          (equal? (flmatrix->lists (flmatrix-identity 2)) '[[1. 0.] [0. 1.]])
-          (equal? (flmatrix->lists (flmatrix-identity 3)) '[[1. 0. 0.] [0. 1. 0.] [0. 0. 1.]]))
-         (list
-          'const-matrix          
-          (equal? (flmatrix->lists (make-flmatrix 2 3 0.)) '((0. 0. 0.) (0. 0. 0.))))
-         (list
-          'matrix->list
-          (equal? (flmatrix->lists (lists->flmatrix '((1. 2.) (3. 4.)))) '((1. 2.) (3. 4.))))
-         (list
-          'matrix->vectors
-          (equal? (flmatrix->vectors (vectors->flmatrix '#(#(1. 2.) #(3. 4.)))) '#(#(1. 2.) #(3. 4.))))
-         (list
-          'matrix-row
-          (equal? (flmatrix-row (flmatrix-identity 3) 0) (list->flmatrix '[[1 0 0]]))
-          (equal? (flmatrix-row (flmatrix-identity 3) 1) (list->flmatrix '[[0 1 0]]))
-          (equal? (flmatrix-row (flmatrix-identity 3) 2) (list->flmatrix '[[0 0 1]])))
-         (list
-          'matrix-col
-          (equal? (flmatrix-column (flmatrix-identity 3) 0) (list->flmatrix '[[1] [0] [0]]))
-          (equal? (flmatrix-column (flmatrix-identity 3) 1) (list->flmatrix '[[0] [1] [0]]))
-          (equal? (flmatrix-column (flmatrix-identity 3) 2) (list->flmatrix '[[0] [0] [1]])))
-         (list
-          'flsubmatrix
-          (equal? (flsubmatrix (flmatrix-identity 3) 1 2 0 0)
+  (with-check-info
+   (['test-group "matrix-constructors.rkt"])
+   (with-check-info
+    (['test-case 'flmatrix-identity])
+          
+    (check-equal? (flmatrix->lists (flmatrix-identity 1)) '[[1.]])
+    (check-equal? (flmatrix->lists (flmatrix-identity 2)) '[[1. 0.] [0. 1.]])
+    (check-equal? (flmatrix->lists (flmatrix-identity 3)) '[[1. 0. 0.] [0. 1. 0.] [0. 0. 1.]]) 
+    (check-equal? (flmatrix->lists (flmatrix-identity 1)) '[[1.]])
+    (check-equal? (flmatrix->lists (flmatrix-identity 2)) '[[1. 0.] [0. 1.]])
+    (check-equal? (flmatrix->lists (flmatrix-identity 3)) '[[1. 0. 0.] [0. 1. 0.] [0. 0. 1.]]))
+   (with-check-info
+    (['test-case 'const-matrix])          
+    (check-equal? (flmatrix->lists (make-flmatrix 2 3 0.)) '((0. 0. 0.) (0. 0. 0.))))
+   (with-check-info
+    (['test-case 'matrix->list])
+    (check-equal? (flmatrix->lists (lists->flmatrix '((1. 2.) (3. 4.)))) '((1. 2.) (3. 4.))))
+   (with-check-info
+    (['test-case 'matrix->vectors])
+    (check-equal? (flmatrix->vectors (vectors->flmatrix '#(#(1. 2.) #(3. 4.)))) '#(#(1. 2.) #(3. 4.))))
+   (with-check-info
+    (['test-case 'matrix-row])
+    (check-equal? (flmatrix-row (flmatrix-identity 3) 0) (list->flmatrix '[[1 0 0]]))
+    (check-equal? (flmatrix-row (flmatrix-identity 3) 1) (list->flmatrix '[[0 1 0]]))
+    (check-equal? (flmatrix-row (flmatrix-identity 3) 2) (list->flmatrix '[[0 0 1]])))
+   (with-check-info
+    (['test-case 'matrix-col])
+    (check-equal? (flmatrix-column (flmatrix-identity 3) 0) (list->flmatrix '[[1] [0] [0]]))
+    (check-equal? (flmatrix-column (flmatrix-identity 3) 1) (list->flmatrix '[[0] [1] [0]]))
+    (check-equal? (flmatrix-column (flmatrix-identity 3) 2) (list->flmatrix '[[0] [0] [1]])))
+   (with-check-info
+    (['test-case 'flsubmatrix])
+    (check-equal? (flsubmatrix (flmatrix-identity 3) 1 2 0 0)
                   (list->flmatrix '[[1 0]]))
-          (equal? (flsubmatrix (flmatrix-identity 3) 2 3 0 0)
+    (check-equal? (flsubmatrix (flmatrix-identity 3) 2 3 0 0)
                   (list->flmatrix '[[1 0 0] [0 1 0]]))))
 
-  (begin 
-    "flmatrix-pointwise.rkt"
-    (let ()
-      (define A   (list->flmatrix '[[1 2] [3 4]]))
-      (define ~A  (list->flmatrix '[[-1 -2] [-3 -4]]))
-      (define B   (list->flmatrix '[[5 6] [7 8]]))
-      (define A+B (list->flmatrix '[[6 8] [10 12]]))
-      (define A-B (list->flmatrix '[[-4 -4] [-4 -4]]))         
-      (list 'flmatrix+ (equal? (flmatrix+ A B) A+B))
-      (list 'flmatrix- 
-            (equal? (flmatrix- A B) A-B)
-            (equal? (flmatrix- A)   ~A))))
+  (with-check-info
+   (['test-group "flmatrix-pointwise.rkt"])
+   (let ()
+     (define A   (list->flmatrix '[[1 2] [3 4]]))
+     (define ~A  (list->flmatrix '[[-1 -2] [-3 -4]]))
+     (define B   (list->flmatrix '[[5 6] [7 8]]))
+     (define A+B (list->flmatrix '[[6 8] [10 12]]))
+     (define A-B (list->flmatrix '[[-4 -4] [-4 -4]]))         
+     (with-check-info
+      (['test-case 'flmatrix+])
+      (check-equal? (flmatrix+ A B) A+B))
+     (with-check-info
+      (['test-case 'flmatrix-])
+      (check-equal? (flmatrix- A B) A-B)
+      (check-equal? (flmatrix- A)   ~A))))
   
-  (begin  
-    "flmatrix-expt.rkt"
-    (let ()
-      (define A (list->flmatrix '[[1 2] [3 4]]))
-      (list
-       'flmatrix-expt
-       (equal? (flmatrix-expt A 0) (flmatrix-identity 2))
-       (equal? (flmatrix-expt A 1) A)
-       (equal? (flmatrix-expt A 2) (list->flmatrix '[[7 10] [15 22]]))
-       (equal? (flmatrix-expt A 3) (list->flmatrix '[[37 54] [81 118]]))
-       (equal? (flmatrix-expt A 8) (list->flmatrix '[[165751 241570] [362355 528106]])))))
+  (with-check-info
+   (['test-group "flmatrix-expt.rkt"])
+   (define A (list->flmatrix '[[1 2] [3 4]]))
+   (with-check-info
+    (['test-case 'flmatrix-expt])
+    (check-equal? (flmatrix-expt A 0) (flmatrix-identity 2))
+    (check-equal? (flmatrix-expt A 1) A)
+    (check-equal? (flmatrix-expt A 2) (list->flmatrix '[[7 10] [15 22]]))
+    (check-equal? (flmatrix-expt A 3) (list->flmatrix '[[37 54] [81 118]]))
+    (check-equal? (flmatrix-expt A 8) (list->flmatrix '[[165751 241570] [362355 528106]]))))
 
-  (begin
-    "flmatrix-operations.rkt"
-    (list 'vandermonde-flmatrix
-          (equal? (flmatrix-vandermonde '(1 2 3) 5)
+  (with-check-info
+   (['test-group "flmatrix-operations.rkt"])
+   (with-check-info
+    (['test-case 'vandermonde-flmatrix])
+    (check-equal? (flmatrix-vandermonde '(1 2 3) 5)
                   (list->flmatrix '[[1 1 1 1 1] [1 2 4 8 16] [1 3 9 27 81]])))
-    (list 'in-column
-          (equal? (for/list ([x (in-flcolumn (flmatrix/dim 2 2  1 2 3 4) 0)]) x)
+   (with-check-info
+    (['test-case 'in-column])
+    (check-equal? (for/list ([x (in-flcolumn (flmatrix/dim 2 2  1 2 3 4) 0)]) x)
                   '(1. 3.))
-          (equal? (for/list ([x (in-flcolumn (flmatrix/dim 2 2  1 2 3 4) 1)]) x)
+    (check-equal? (for/list ([x (in-flcolumn (flmatrix/dim 2 2  1 2 3 4) 1)]) x)
                   '(2. 4.))
-          (equal? (for/list ([x (in-flcolumn (flcolumn 5 2 3))]) x)
+    (check-equal? (for/list ([x (in-flcolumn (flcolumn 5 2 3))]) x)
                   '(5. 2. 3.)))
-    (list 'in-row
-          (equal? (for/list ([x (in-flrow (flmatrix/dim 2 2  1 2 3 4) 0)]) x)
+   (with-check-info
+    (['test-case 'in-row])
+    (check-equal? (for/list ([x (in-flrow (flmatrix/dim 2 2  1 2 3 4) 0)]) x)
                   '(1. 2.))
-          (equal? (for/list ([x (in-flrow (flmatrix/dim 2 2  1 2 3 4) 1)]) x)
+    (check-equal? (for/list ([x (in-flrow (flmatrix/dim 2 2  1 2 3 4) 1)]) x)
                   '(3. 4.)))
-    (list 'for/flmatrix:
-          (equal? (for/flmatrix 2 4 ([i (in-naturals)]) i)
+   (with-check-info
+    (['test-case 'for/flmatrix:])
+    (check-equal? (for/flmatrix 2 4 ([i (in-naturals)]) i)
                   (flmatrix/dim 2 4 
-                              0 1 2 3
-                              4 5 6 7))
-          (equal? (for/flmatrix 2 4 #:column ([i (in-naturals)]) i)
+                                0 1 2 3
+                                4 5 6 7))
+    (check-equal? (for/flmatrix 2 4 #:column ([i (in-naturals)]) i)
                   (flmatrix/dim 2 4    
-                              0 2 4 6
-                              1 3 5 7))
-          (equal? (for/flmatrix 3 3 ([i (in-range 10 100)]) i)
+                                0 2 4 6
+                                1 3 5 7))
+    (check-equal? (for/flmatrix 3 3 ([i (in-range 10 100)]) i)
                   (flmatrix/dim 3 3 10 11 12 13 14 15 16 17 18)))
-    (list 'for*/flmatrix:
-          (equal? (for*/flmatrix 3 3 ([i (in-range 3)] [j (in-range 3)]) (+ (* i 10) j))
+   (with-check-info
+    (['test-case 'for*/flmatrix:])
+    (check-equal? (for*/flmatrix 3 3 ([i (in-range 3)] [j (in-range 3)]) (+ (* i 10) j))
                   (flmatrix/dim 3 3 0 1 2 10 11 12 20 21 22)))    
-    (list 'flmatrix-block-diagonal
-          (equal? (flmatrix-block-diagonal (flmatrix/dim 2 2 1 2 3 4) (flmatrix/dim 1 3 5 6 7))
+   (with-check-info
+    (['test-case 'flmatrix-block-diagonal])
+    (check-equal? (flmatrix-block-diagonal (flmatrix/dim 2 2 1 2 3 4) (flmatrix/dim 1 3 5 6 7))
                   (list->flmatrix '[[1 2 0 0 0] [3 4 0 0 0] [0 0 5 6 7]])))
-    (list 'flmatrix-augment
-          (equal? (flmatrix-augment (flcolumn 1 2 3) (flcolumn 4 5 6) (flcolumn 7 8 9))
+   (with-check-info
+    (['test-case 'flmatrix-augment])
+    (check-equal? (flmatrix-augment (flcolumn 1 2 3) (flcolumn 4 5 6) (flcolumn 7 8 9))
                   (flmatrix/dim 3 3  1 4 7  2 5 8  3 6 9)))
-    (list 'flmatrix-stack
-          (equal? (flmatrix-stack (flcolumn 1 2 3) (flcolumn 4 5 6) (flcolumn 7 8 9))
+   (with-check-info
+    (['test-case 'flmatrix-stack])
+    (check-equal? (flmatrix-stack (flcolumn 1 2 3) (flcolumn 4 5 6) (flcolumn 7 8 9))
                   (flcolumn 1 2 3 4 5 6 7 8 9)))
-    (list 'column-dimension
-          (= (flcolumn-size #(1 2 3)) 3)
-          (= (flcolumn-size (vector->flmatrix 1 2 #(1 2))) 1))
-    (let ([flmatrix: vector->flmatrix])
-      (list 'column-dot
-            (= (flcolumn-dot (flcolumn 1 2)   (flcolumn 1 2)) 5)
-            (= (flcolumn-dot (flcolumn 1 2)   (flcolumn 3 4)) 11)
-            (= (flcolumn-dot (flcolumn 3 4)   (flcolumn 3 4)) 25)
-            (= (flcolumn-dot (flcolumn 1 2 3) (flcolumn 4 5 6))
-               (+ (* 1 4) (* 2 5) (* 3 6)))))
-    (list 'flmatrix-trace
-          (equal? (flmatrix-trace (vector->flmatrix 2 2 #(1 2 3 4))) 5.))
-    (let ([flmatrix: vector->flmatrix])
-      (list 'column-norm
-            (= (flcolumn-norm (flcolumn 2 4)) (sqrt 20))))
-    (list 'column-projection
-          (equal? (flcolumn-projection #(1 2 3) #(4 5 6)) (flcolumn 128/77 160/77 192/77))
-          (equal? (flcolumn-projection (flcolumn 1 2 3) (flcolumn 2 4 3))
+   (with-check-info
+    (['test-case 'column-dimension])
+    (= (flcolumn-size #(1 2 3)) 3)
+    (= (flcolumn-size (vector->flmatrix 1 2 #(1 2))) 1))
+   (let ([flmatrix: vector->flmatrix])
+     (with-check-info
+      (['test-case 'column-dot])
+      (= (flcolumn-dot (flcolumn 1 2)   (flcolumn 1 2)) 5)
+      (= (flcolumn-dot (flcolumn 1 2)   (flcolumn 3 4)) 11)
+      (= (flcolumn-dot (flcolumn 3 4)   (flcolumn 3 4)) 25)
+      (= (flcolumn-dot (flcolumn 1 2 3) (flcolumn 4 5 6))
+         (+ (* 1 4) (* 2 5) (* 3 6)))))
+   (with-check-info
+    (['test-case 'flmatrix-trace])
+    (check-equal? (flmatrix-trace (vector->flmatrix 2 2 #(1 2 3 4))) 5.))
+   (let ([flmatrix: vector->flmatrix])
+     (with-check-info
+      (['test-case 'column-norm])
+      (= (flcolumn-norm (flcolumn 2 4)) (sqrt 20))))
+   (with-check-info
+    (['test-case 'column-projection])
+    (check-equal? (flcolumn-projection #(1 2 3) #(4 5 6)) (flcolumn 128/77 160/77 192/77))
+    (check-equal? (flcolumn-projection (flcolumn 1 2 3) (flcolumn 2 4 3))
                   (flmatrix-scale 19/29 (flcolumn 2 4 3))))
-    (list 'projection-on-orthogonal-basis
-          (equal? (flprojection-on-orthogonal-basis #(3 -2 2) (list #(-1 0 2) #( 2 5 1)))
+   (with-check-info
+    (['test-case 'projection-on-orthogonal-basis])
+    (check-equal? (flprojection-on-orthogonal-basis #(3 -2 2) (list #(-1 0 2) #( 2 5 1)))
                   (flcolumn -1/3 -1/3 1/3))
-          (equal? (flprojection-on-orthogonal-basis 
+    (check-equal? (flprojection-on-orthogonal-basis 
                    (flcolumn 3 -2 2) (list #(-1 0 2) (flcolumn 2 5 1)))
                   (flcolumn -1/3 -1/3 1/3)))
-    (list 'projection-on-orthonormal-basis
-          (equal? (flprojection-on-orthonormal-basis 
+   (with-check-info
+    (['test-case 'projection-on-orthonormal-basis])
+    (check-equal? (flprojection-on-orthonormal-basis 
                    #(1 2 3 4) 
                    (list (flmatrix-scale 1/2 (flcolumn  1  1  1 1))
                          (flmatrix-scale 1/2 (flcolumn -1  1 -1 1))
                          (flmatrix-scale 1/2 (flcolumn  1 -1 -1 1))))
                   (flcolumn 2 3 2 3)))
-    (list 'flgram-schmidt-orthogonal
-          (equal? (flgram-schmidt-orthogonal (list #(3 1) #(2 2)))
+   (with-check-info
+    (['test-case 'flgram-schmidt-orthogonal])
+    (check-equal? (flgram-schmidt-orthogonal (list #(3 1) #(2 2)))
                   (list (flcolumn 3 1) (flcolumn -2/5 6/5))))
-    (list 'flvector-normalize
-          (equal? (flcolumn-normalize #(3 4)) 
+   (with-check-info
+    (['test-case 'flvector-normalize])
+    (check-equal? (flcolumn-normalize #(3 4)) 
                   (flcolumn 3/5 4/5)))
-    (list 'flgram-schmidt-orthonormal
-          (equal? (flgram-schmidt-orthonormal '(#(3 1) #(2 2)))
+   (with-check-info
+    (['test-case 'flgram-schmidt-orthonormal])
+    (check-equal? (flgram-schmidt-orthonormal '(#(3 1) #(2 2)))
                   (list (flcolumn-normalize #(3 1))
                         (flcolumn-normalize #(-2/5 6/5)))))
     
-    (list 'projection-on-subspace
-          (equal? (flprojection-on-subspace #(1 2 3) '(#(2 4 3)))
+   (with-check-info
+    (['test-case 'projection-on-subspace])
+    (check-equal? (flprojection-on-subspace #(1 2 3) '(#(2 4 3)))
                   (flmatrix-scale 19/29 (flcolumn 2 4 3))))
-    (list 'unit-vector
-          (equal? (flcolumn-unit 4 1) (flcolumn 0 1 0 0)))
-    (list 'flmatrix-qr
-          (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
-            (equal? (list Q R)
-                    (list (flmatrix/dim 3 2  0.7071067811865475 0 0 1 0.7071067811865475 0)
-                          (flmatrix/dim 2 2  1.414213562373095 1.414213562373095 0 1)))))
-    (list 'flmatrix-solve
-          (let* ([M (list->flmatrix '[[1 5] [2 3]])] 
-                 [b (list->flmatrix '[[5] [5]])])
-            (equal? (flmatrix* M (flmatrix-solve M b)) b)))
-    (list 'flmatrix-inverse
-          (equal? (let ([M (list->flmatrix '[[1 2] [3 4]])]) (flmatrix* M (flmatrix-inverse M)))
+   (with-check-info
+    (['test-case 'unit-vector])
+    (check-equal? (flcolumn-unit 4 1) (flcolumn 0 1 0 0)))
+   (with-check-info (['test-case 'flmatrix-qr])
+                    (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
+                      (check-equal? (list Q R)
+                                    (list (flmatrix/dim 3 2  0.7071067811865475 0 0 1 0.7071067811865475 0)
+                                          (flmatrix/dim 2 2  1.414213562373095 1.414213562373095 0 1)))))
+   (with-check-info
+    (['test-case 'flmatrix-solve])
+    (let* ([M (list->flmatrix '[[1 5] [2 3]])] 
+           [b (list->flmatrix '[[5] [5]])])
+      (check-equal? (flmatrix* M (flmatrix-solve M b)) b)))
+   (with-check-info
+    (['test-case 'flmatrix-inverse])
+    (check-equal? (let ([M (list->flmatrix '[[1 2] [3 4]])]) (flmatrix* M (flmatrix-inverse M)))
                   (flmatrix-identity 2))
-          (equal? (let ([M (list->flmatrix '[[1 2] [3 4]])]) (flmatrix* (flmatrix-inverse M) M))
+    (check-equal? (let ([M (list->flmatrix '[[1 2] [3 4]])]) (flmatrix* (flmatrix-inverse M) M))
                   (flmatrix-identity 2)))
-    (list 'flmatrix-determinant
-          (equal? (flmatrix-determinant (list->flmatrix '[[3]])) 3.)
-          (equal? (flmatrix-determinant (list->flmatrix '[[1 2] [3 4]])) (- (* 1. 4.) (* 2. 3.)))
-          (flequal? (flmatrix-determinant (list->flmatrix '[[1 2 3] [4  5 6] [7 8 9]])) 0.)
-          (flequal? (flmatrix-determinant (list->flmatrix '[[1 2 3] [4 -5 6] [7 8 9]])) 120.)
-          (flequal? (flmatrix-determinant 
+   (with-check-info
+    (['test-case 'flmatrix-determinant])
+    (check-equal? (flmatrix-determinant (list->flmatrix '[[3]])) 3.)
+    (check-equal? (flmatrix-determinant (list->flmatrix '[[1 2] [3 4]])) (- (* 1. 4.) (* 2. 3.)))
+    (flcheck-equal? (flmatrix-determinant (list->flmatrix '[[1 2 3] [4  5 6] [7 8 9]])) 0.)
+    (flcheck-equal? (flmatrix-determinant (list->flmatrix '[[1 2 3] [4 -5 6] [7 8 9]])) 120.)
+    (flcheck-equal? (flmatrix-determinant 
                      (list->flmatrix '[[1 2 3 4] [-5 6 7 8] [9 10 -11 12] [13 14 15 16]])) 5280.))
-    (list 'flmatrix-scale
-          (equal? (flmatrix-scale 2 (list->flmatrix '[[1 2] [3 4]]))
+   (with-check-info
+    (['test-case 'flmatrix-scale])
+    (check-equal? (flmatrix-scale 2 (list->flmatrix '[[1 2] [3 4]]))
                   (list->flmatrix '[[2 4] [6 8]])))
-    (list 'flmatrix-transpose
-          (equal? (flmatrix-transpose (list->flmatrix '[[1 2] [3 4]]))
-                  (list->flmatrix '[[1 3] [2 4]])))    
-    ; TODO: Just use U from LU factorization
-    #;(let ()
-      (: gauss-eliminate : (flmatrix Number) Boolean Boolean -> (flmatrix Number))
-      (define (gauss-eliminate M u? p?)
-        (let-values ([(M wp) (flmatrix-gauss-eliminate M u? p?)])
-          M))
-      (list 'flmatrix-gauss-eliminate
-            (equal? (let ([M (list->flmatrix '[[1 2] [3 4]])])
-                      (gauss-eliminate M #f #f))
-                    (list->flmatrix '[[1 2] [0 -2]]))
-            (equal? (let ([M (list->flmatrixixix  '[[2 4] [3 4]])])
-                      (gauss-eliminate M #t #f))
-                    (list->flmatrixixixix '[[1 2] [0 1]]))
-            (equal? (let ([M (list->flmatrixix  '[[2. 4.] [3. 4.]])])
-                      (gauss-eliminate M #t #t))
-                    (list->flmatrixix '[[1. 1.3333333333333333] [0. 1.]]))
-            (equal? (let ([M (list->flmatrix  '[[1 4] [2 4]])])
-                      (gauss-eliminate M #t #t))
-                    (list->flmatrix '[[1 2] [0 1]]))
-            (equal? (let ([M (list->flmatrix  '[[1 2] [2 4]])])
-                      (gauss-eliminate M #f #t))
-                    (list->flmatrix '[[2 4] [0 0]]))))
-    (list 
-     'flmatrix-scale-row
-     (equal? (flmatrix-scale-row (flmatrix-identity 3) 0 2)
-             (lists->flmatrix '[[2 0 0] [0 1 0] [0 0 1]])))
-    (list
-     'flmatrix-swap-rows
-     (equal? (flmatrix-swap-rows (lists->flmatrix '[[1 2 3] [4 5 6] [7 8 9]]) 0 1)
-             (lists->flmatrix '[[4 5 6] [1 2 3] [7 8 9]])))
-    (list
-     'flmatrix-add-scaled-row
-     (equal? (flmatrix-add-scaled-row (lists->flmatrix '[[1 2 3] [4 5 6] [7 8 9]]) 0 2 1)
-             (lists->flmatrix '[[9 12 15] [4 5 6] [7 8 9]])))
-    (let ()
-      (define M (lists->flmatrix '[[1  1  0  3]
+   (with-check-info
+    (['test-case 'flmatrix-transpose])
+    (check-equal? (flmatrix-transpose (list->flmatrix '[[1 2] [3 4]]))
+                  (list->flmatrix '[[1 3] [2 4]])))
+   ; TODO: Just use U from LU factorization
+   #;(let ()
+       (: gauss-eliminate : (flmatrix Number) Boolean Boolean -> (flmatrix Number))
+       (define (gauss-eliminate M u? p?)
+         (let-values ([(M wp) (flmatrix-gauss-eliminate M u? p?)])
+           M))
+       (with-check-info
+        (['test-case 'flmatrix-gauss-eliminate])
+        (check-equal? (let ([M (list->flmatrix '[[1 2] [3 4]])])
+                        (gauss-eliminate M #f #f))
+                      (list->flmatrix '[[1 2] [0 -2]]))
+        (check-equal? (let ([M (list->flmatrixixix  '[[2 4] [3 4]])])
+                        (gauss-eliminate M #t #f))
+                      (list->flmatrixixixix '[[1 2] [0 1]]))
+        (check-equal? (let ([M (list->flmatrixix  '[[2. 4.] [3. 4.]])])
+                        (gauss-eliminate M #t #t))
+                      (list->flmatrixix '[[1. 1.3333333333333333] [0. 1.]]))
+        (check-equal? (let ([M (list->flmatrix  '[[1 4] [2 4]])])
+                        (gauss-eliminate M #t #t))
+                      (list->flmatrix '[[1 2] [0 1]]))
+        (check-equal? (let ([M (list->flmatrix  '[[1 2] [2 4]])])
+                        (gauss-eliminate M #f #t))
+                      (list->flmatrix '[[2 4] [0 0]]))))
+   (with-check-info
+    (['test-case 'flmatrix-scale-row])
+    (check-equal? (flmatrix-scale-row (flmatrix-identity 3) 0 2)
+                  (lists->flmatrix '[[2 0 0] [0 1 0] [0 0 1]])))
+   (with-check-info
+    (['test-case 'flmatrix-swap-rows])
+    (check-equal? (flmatrix-swap-rows (lists->flmatrix '[[1 2 3] [4 5 6] [7 8 9]]) 0 1)
+                  (lists->flmatrix '[[4 5 6] [1 2 3] [7 8 9]])))
+   (with-check-info
+    (['test-case 'flmatrix-add-scaled-row])
+    (check-equal? (flmatrix-add-scaled-row (lists->flmatrix '[[1 2 3] [4 5 6] [7 8 9]]) 0 2 1)
+                  (lists->flmatrix '[[9 12 15] [4 5 6] [7 8 9]])))
+   (let ()
+     (define M (lists->flmatrix '[[1  1  0  3]
                                   [2  1 -1  1]
                                   [3 -1 -1  2]
                                   [-1  2  3 -1]]))      
-      (define-values (P L U) (flmatrix-plu M))
-      (list
-       'flmatrix-plu         
-       (equal? (flmatrix* P (flmatrix* L U)) M)))
-    (list 
-     'flmatrix-rank
-     (equal? (flmatrix-rank (list->flmatrix '[[0 0] [0 0]])) 0)
-     (equal? (flmatrix-rank (list->flmatrix '[[1 0] [0 0]])) 1)
-     (equal? (flmatrix-rank (list->flmatrix '[[1 0] [0 3]])) 2)
-     (equal? (flmatrix-rank (list->flmatrix '[[1 2] [2 4]])) 1)
-     (equal? (flmatrix-rank (list->flmatrix '[[1 2] [3 4]])) 2))
-    (list 
-     'flmatrix-nullity
-     (equal? (flmatrix-nullity (list->flmatrix '[[0 0] [0 0]])) 2)
-     (equal? (flmatrix-nullity (list->flmatrix '[[1 0] [0 0]])) 1)
-     (equal? (flmatrix-nullity (list->flmatrix '[[1 0] [0 3]])) 0)
-     (equal? (flmatrix-nullity (list->flmatrix '[[1 2] [2 4]])) 1)
-     (equal? (flmatrix-nullity (list->flmatrix '[[1 2] [3 4]])) 0))
-    ; Not implemented yet...
-    #;(let ()
-        (define-values (c1 n1) 
-          (flmatrix-column+null-space (list->flmatrix '[[0 0] [0 0]])))
-        (define-values (c2 n2) 
-          (flmatrix-column+null-space (list->flmatrix '[[1 2] [2 4]])))
-        (define-values (c3 n3) 
-          (flmatrix-column+null-space (list->flmatrix '[[1 2] [2 5]])))
-        (list 
-         'flmatrix-column+null-space
-         (equal? c1 '())
-         (equal? n1 (list (list->flmatrix '[[0] [0]])
-                          (list->flmatrix '[[0] [0]])))
-         (equal? c2 (list (list->flmatrix '[[1] [2]])))
-         ;(equal? n2 '([0 0]))
-         (equal? c3 (list (list->flmatrix '[[1] [2]])
-                          (list->flmatrix '[[2] [5]])))
-         (equal? n3 '()))))
+     (define-values (P L U) (flmatrix-plu M))
+     (with-check-info
+      (['test-case 'flmatrix-plu])
+      (check-equal? (flmatrix* P (flmatrix* L U)) M)))
+   (with-check-info
+    (['test-case 'flmatrix-rank])
+    (check-equal? (flmatrix-rank (list->flmatrix '[[0 0] [0 0]])) 0)
+    (check-equal? (flmatrix-rank (list->flmatrix '[[1 0] [0 0]])) 1)
+    (check-equal? (flmatrix-rank (list->flmatrix '[[1 0] [0 3]])) 2)
+    (check-equal? (flmatrix-rank (list->flmatrix '[[1 2] [2 4]])) 1)
+    (check-equal? (flmatrix-rank (list->flmatrix '[[1 2] [3 4]])) 2))
+   (with-check-info
+    (['test-case 'flmatrix-nullity])
+    (check-equal? (flmatrix-nullity (list->flmatrix '[[0 0] [0 0]])) 2)
+    (check-equal? (flmatrix-nullity (list->flmatrix '[[1 0] [0 0]])) 1)
+    (check-equal? (flmatrix-nullity (list->flmatrix '[[1 0] [0 3]])) 0)
+    (check-equal? (flmatrix-nullity (list->flmatrix '[[1 2] [2 4]])) 1)
+    (check-equal? (flmatrix-nullity (list->flmatrix '[[1 2] [3 4]])) 0))
+   ; Not implemented yet...
+   #;(let ()
+       (define-values (c1 n1) 
+         (flmatrix-column+null-space (list->flmatrix '[[0 0] [0 0]])))
+       (define-values (c2 n2) 
+         (flmatrix-column+null-space (list->flmatrix '[[1 2] [2 4]])))
+       (define-values (c3 n3) 
+         (flmatrix-column+null-space (list->flmatrix '[[1 2] [2 5]])))
+       (with-check-info
+        (['test-case 'flmatrix-column+null-space])
+        (check-equal? c1 '())
+        (check-equal? n1 (list (list->flmatrix '[[0] [0]])
+                               (list->flmatrix '[[0] [0]])))
+        (check-equal? c2 (list (list->flmatrix '[[1] [2]])))
+        ;(check-equal? n2 '([0 0]))
+        (check-equal? c3 (list (list->flmatrix '[[1] [2]])
+                               (list->flmatrix '[[2] [5]])))
+        (check-equal? n3 '()))))
   
-  (begin
-    "matrix-multiply.rkt"
-    (list 'flmatrix*
-          (let ()
-            (define-values (A B AB) (values '[[1 2] [3 4]] '[[5 6] [7 8]] '[[19 22] [43 50]]))
-            (equal? (flmatrix* (list->flmatrix A) (list->flmatrix B)) (list->flmatrix AB)))
-          (let () 
-            (define-values (A B AB) (values '[[1 2] [3 4]] '[[5 6 7] [8 9 10]] '[[21 24 27] [47 54 61]]))
-            (equal? (flmatrix* (list->flmatrix A) (list->flmatrix B)) (list->flmatrix AB))))))
-
-)
+  (with-check-info
+   (['test-group "matrix-multiply.rkt"])
+   (with-check-info
+    (['test-case 'flmatrix*])
+    (let ()
+      (define-values (A B AB) (values '[[1 2] [3 4]] '[[5 6] [7 8]] '[[19 22] [43 50]]))
+      (check-equal? (flmatrix* (list->flmatrix A) (list->flmatrix B)) (list->flmatrix AB)))
+    (let () 
+      (define-values (A B AB) (values '[[1 2] [3 4]] '[[5 6 7] [8 9 10]] '[[21 24 27] [47 54 61]]))
+      (check-equal? (flmatrix* (list->flmatrix A) (list->flmatrix B)) (list->flmatrix AB))))))
 
 (define (build-flmatrix m n f)
   (for*/flmatrix m n 
                  ([i (in-range m)]
                   [j (in-range n)])
                  (f i j)))
-
