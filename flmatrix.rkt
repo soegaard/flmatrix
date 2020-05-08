@@ -369,10 +369,10 @@
          (unless (symbol? c)
            (error (format "expected symbol, got: ~a" c)))
          (case c
-           [(c) _double] ; TODO missing from ffi?
-           [(z) _double] ; TODO
-           [(d) _double]
-           [(s) _float]
+           [(c) #'_double] ; TODO missing from ffi?
+           [(z) #'_double] ; TODO
+           [(d) #'_double]
+           [(s) #'_float]
            [else (error "expected one of c, z, d, s")]))
        (with-syntax ([(name ...) 
                       (map (xname->name stx (syntax->datum #'xname))
