@@ -60,6 +60,8 @@
 ; CBLAS and LAPACK are used.
 ; The first two are C-based whereas LAPACK is Fortran based.
 
+; Note: Use trailing _ in names exported by LAPACK (in order to work both on macOS and Linux).
+
 ;; Find placement of libraries.
 
 (define-values (cblas-lib lapack-lib)
@@ -1278,7 +1280,7 @@
         -> _void
         -> info))
 
-(define-lapack dgeqrf
+(define-lapack dgeqrf_
   ; Compute A = Q*R  
   ; Use dorgqr to generate matrix from output
   (_fun (m : (_ptr i _int)) ; rows in A
@@ -1291,6 +1293,7 @@
         (info : (_ptr o _int))  ; 
         -> _void
         -> info))
+
 
 (define-lapack dorgqr_
   ; generate matrix from output of dgeqrf
@@ -1313,14 +1316,17 @@
   (define k (min m n))
   (define tau (make-flmatrix k k))
   (define atau (flmatrix-a tau))
-  (define lwork (* 64 n)) ; 64 block size guess
-  (define work (make-flmatrix lwork 1))
-  (define awork (flmatrix-a work))
-  ; TODO: Use lwork=-1 to get optimal lwork size
-  (define info (dgeqrf m n a lda atau awork lwork))
+  ; first call dgeqrf_ to get a working size
+  (define work0 (make-flmatrix 1 1))
+  (define info0 (dgeqrf_ m n a lda atau (flmatrix-a work0) -1))
+  (define lwork (inexact->exact (flmatrix-ref work0 0 0))) ; 64 is a typical value
+  ; now make the real call
+  (define work  (make-flmatrix lwork 1))  
+  (define awork (flmatrix-a work))  
+  (define info (dgeqrf_ m n a lda atau awork lwork))
   (define R (flmatrix-extract-upper A))
   (define info1 (dorgqr_ m n k a lda atau awork lwork))  
-  ; ? TODO: what to do with info
+  ; ? TODO: what to do with info  
   (values A R))
 
 ; old version used dgeqrfp
