@@ -485,8 +485,9 @@
   (for/vector #:length m
     ([i (in-range 0 m)])
     (for/vector #:length n
-      ([j (in-range 0 n)])
-      (ptr-ref (ptr-elm a lda i j) _double))))
+        ([j (in-range 0 n)])
+      (ptr-ref a _double (+ i (* j lda)))
+      #;(ptr-ref (ptr-elm a lda i j) _double))))
 
 (define (vector->flmatrix m n v)
   (unless (= (* m n) (vector-length v))
@@ -1261,8 +1262,23 @@
   (flmatrix-svd! (copy-flmatrix A)))
 
 ;;; QR Factorization
-; XXX
-#;(define-lapack dgeqrf_ 
+; dgeqrfp returns positive entries on the diagonal
+; for some reason this is missing on macOS, so now dgeqrf is used instead
+#;(define-lapack dgeqrfp_ 
+  ; Compute A = Q*R  
+  ; Use dorgqr to generate matrix from output
+  (_fun (m : (_ptr i _int)) ; rows in A
+        (n : (_ptr i _int)) ; cols in A
+        (a : _flmatrix) ; io
+        (lda : (_ptr i _int))
+        (tau : _flmatrix) ; min(m,n)x1        
+        (work : _flmatrix) ; dim max(1,lwork) (x1)
+        (lwork : (_ptr i _int)) ; >=max(1,n) best with >=n * blocksize
+        (info : (_ptr o _int))  ; 
+        -> _void
+        -> info))
+
+(define-lapack dgeqrf
   ; Compute A = Q*R  
   ; Use dorgqr to generate matrix from output
   (_fun (m : (_ptr i _int)) ; rows in A
@@ -1290,7 +1306,24 @@
         -> _void
         -> info))
 
-; 
+
+(define (flmatrix-qr B)
+  (define A (copy-flmatrix B))
+  (define-param (m n a lda) A)
+  (define k (min m n))
+  (define tau (make-flmatrix k k))
+  (define atau (flmatrix-a tau))
+  (define lwork (* 64 n)) ; 64 block size guess
+  (define work (make-flmatrix lwork 1))
+  (define awork (flmatrix-a work))
+  ; TODO: Use lwork=-1 to get optimal lwork size
+  (define info (dgeqrf m n a lda atau awork lwork))
+  (define R (flmatrix-extract-upper A))
+  (define info1 (dorgqr_ m n k a lda atau awork lwork))  
+  ; ? TODO: what to do with info
+  (values A R))
+
+; old version used dgeqrfp
 #;(define (flmatrix-qr B)
   (define A (copy-flmatrix B))
   (define-param (m n a lda) A)
@@ -2098,12 +2131,22 @@
    (with-check-info
     (['test-case 'unit-vector])
     (check-equal? (flcolumn-unit 4 1) (flcolumn 0 1 0 0)))
-    ; XXX
+    (with-check-info (['test-case 'flmatrix-qr])
+      (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
+        (check-equal? (list Q R)
+                      (list (flmatrix/dim 3 2
+                                          -0.7071067811865472  1.4349369327986526e-17
+                                          -0.0                -1.0
+                                          -0.7071067811865475 -1.434936932798653e-17)
+                            (flmatrix/dim 2 2
+                                          -1.4142135623730951 -1.4142135623730947
+                                           0.0                -1.0)))))
     #;(with-check-info (['test-case 'flmatrix-qr])
-                    (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
-                      (check-equal? (list Q R)
-                                    (list (flmatrix/dim 3 2  0.7071067811865475 0 0 1 0.7071067811865475 0)
-                                          (flmatrix/dim 2 2  1.414213562373095 1.414213562373095 0 1)))))
+        ; this test case is used when dgeqrfp (p for positive diagonal is used)
+        (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
+          (check-equal? (list Q R)
+                        (list (flmatrix/dim 3 2  0.7071067811865475 0 0 1 0.7071067811865475 0)
+                              (flmatrix/dim 2 2  1.414213562373095 1.414213562373095 0 1)))))
    (with-check-info
     (['test-case 'flmatrix-solve])
     (let* ([M (list->flmatrix '[[1 5] [2 3]])] 
