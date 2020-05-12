@@ -205,7 +205,7 @@
         (define a   (flmatrix-a A1))
         (define lda (flmatrix-lda A1)))]
     [_
-     (error)]))
+     (syntax/loc stx (error "Wrong number of arguments"))]))
 
 ;;;
 ;;; MEMORY LAYOUT
