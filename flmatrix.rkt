@@ -530,28 +530,35 @@
 (define-syntax (for/flmatrix stx)
   (syntax-case stx ()
     ; elements in column 0 are generated first, then column 1, ...
-    [(_ m-expr n-expr #:column (for:-clause ...) . defs+exprs)
+    [(_ m-expr n-expr #:column (clause ...) . defs+exprs)
      (syntax/loc stx
        (let ()
-         (define m m-expr)
-         (define n n-expr)
-         (define m*n (* m n))
-         (define v (make-vector m*n 0))
-         (define k 0)
-         (for ([i (in-range m*n)] for:-clause ...)
+         (define m  m-expr)
+         (define n  n-expr)
+         (define mn (* m n))
+         (define a  (alloc-flmatrix m n))
+         (for ([k (in-range mn)] clause ...)
            (define x (let () . defs+exprs))
-           (vector-set! v (+ (* n (remainder k m)) (quotient k m)) x)
-           (set! k (+ k 1)))         
-         (vector->flmatrix m n v)))]
+           (ptr-set! a _double* k x))         
+         (flmatrix m n a m)))]
     ; elements in row 0 are generated first, then row 1, ...
     [(_ m-expr n-expr (clause ...) . defs+exprs)
      (syntax/loc stx
-       (let ([m m-expr] [n n-expr])
-         (define flat-vector           
-           (for/vector #:length (* m n)
-             (clause ...) . defs+exprs))
-         ; TODO (efficiency): Skip temporary vector
-         (vector->flmatrix m n flat-vector)))]))
+       (let* ([m m-expr]
+              [n n-expr]
+              [a  (alloc-flmatrix m n)]             
+              [i  0]        ; row
+              [j  0]        ; column
+              [jm (* j m)]) 
+         (for ([k (in-range (* m n))] clause ...)
+           (define x (let () . defs+exprs))
+           (ptr-set! a _double* k x)
+           (cond [(= j (- n 1)) (set! i  (+ i 1))
+                                (set! j  0)
+                                (set! jm 0)]
+                 [else          (set! j  (+ j 1))
+                                (set! jm (+ jm m))]))
+         (flmatrix m n a m)))]))
 
 ; (for*/flmatrix m n (clause ...) . defs+exprs)
 ;    Return an  m x n  flmatrix with elements from the last expr.
@@ -566,32 +573,34 @@
 
 (define-syntax (for*/flmatrix stx)
   (syntax-case stx ()
-    [(_ m-expr n-expr #:column (clause ...) defs+exprs ... expr)
+    [(_ m-expr n-expr #:column (clause ...) . defs+exprs)
      (syntax/loc stx
        (let* ([m  m-expr] 
               [n  n-expr]
               [mn (* m n)]
               [a (alloc-flmatrix m n)]              
               [k 0])
-         (for* (clause ... #:break (= k mn)) defs+exprs ... 
-               (ptr-set! a _double* k expr)
-               (set! k (+ k 1)))
+         (for* (clause ... #:break (= k mn))
+           (define x (let () . defs+exprs))
+           (ptr-set! a _double* k x)
+           (set! k (+ k 1)))
          (flmatrix m n a m)))]
-    [(_ m-expr n-expr (clause ...) defs+exprs ... expr)
+    [(_ m-expr n-expr (clause ...) . defs+exprs)
      (syntax/loc stx
        (let ([m m-expr] [n n-expr])
-         (define a     (alloc-flmatrix m n))
-         (define i   0) ; row
-         (define j   0) ; column
-         (define j*m 0)
+         (define a  (alloc-flmatrix m n))
+         (define i  0) ; row
+         (define j  0) ; column
+         (define jm 0)
          (define stop (* m (- n 1)))
-         (for* (clause ... #:break (= i m)) defs+exprs ...               
-               (ptr-set! a _double* (+ i j*m) expr)
-               (cond [(= j (- n 1)) (set! i   (+ i 1))
-                                    (set! j   0)
-                                    (set! j*m 0)]
-                     [else          (set! j   (+ j 1))
-                                    (set! j*m (+ j*m m))]))
+         (for* (clause ... #:break (= i m))
+           (define x (let () . defs+exprs))
+           (ptr-set! a _double* (+ i jm) x)
+           (cond [(= j (- n 1)) (set! i  (+ i 1))
+                                (set! j  0)
+                                (set! jm 0)]
+                 [else          (set! j  (+ j 1))
+                                (set! jm (+ jm m))]))
          (flmatrix m n a m)))]))
 
 (define-syntax (for/flmatrix-sum stx)
