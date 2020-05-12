@@ -2156,21 +2156,12 @@
     (['test-case 'unit-vector])
     (check-equal? (flcolumn-unit 4 1) (flcolumn 0 1 0 0)))
     (with-check-info (['test-case 'flmatrix-qr])
-      (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
-        (check-equal? (list Q R)
-                      (list (flmatrix/dim 3 2
-                                          -0.7071067811865472  1.4349369327986526e-17
-                                          -0.0                -1.0
-                                          -0.7071067811865475 -1.434936932798653e-17)
-                            (flmatrix/dim 2 2
-                                          -1.4142135623730951 -1.4142135623730947
-                                           0.0                -1.0)))))
-    #;(with-check-info (['test-case 'flmatrix-qr])
-        ; this test case is used when dgeqrfp (p for positive diagonal is used)
-        (let-values ([(Q R) (flmatrix-qr (flmatrix/dim 3 2  1 1 0 1 1 1))])
-          (check-equal? (list Q R)
-                        (list (flmatrix/dim 3 2  0.7071067811865475 0 0 1 0.7071067811865475 0)
-                              (flmatrix/dim 2 2  1.414213562373095 1.414213562373095 0 1)))))
+      (let*-values ([(A) (flmatrix/dim 3 2  1 1 0 1 1 1)]
+                    [(Q R) (flmatrix-qr A)])
+        (check-true
+         (flmatrix= (flmatrix* Q R)
+                    A
+                    epsilon))))
    (with-check-info
     (['test-case 'flmatrix-solve])
     (let* ([M (list->flmatrix '[[1 5] [2 3]])] 
