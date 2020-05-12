@@ -563,23 +563,36 @@
 ;    The first m values produced becomes the first column.
 ;    The next m values becomes the second column and so on.
 ;    The bindings in clauses run nested.
+
 (define-syntax (for*/flmatrix stx)
   (syntax-case stx ()
-    [(_ m-expr n-expr #:column (clause ...) . defs+exprs)
+    [(_ m-expr n-expr #:column (clause ...) defs+exprs ... expr)
      (syntax/loc stx
-       (let* ([m m-expr] 
-              [n n-expr]
-              [v (make-vector (* m n) 0)]
-              [w (for*/vector #:length (* m n) (clause ...) . defs+exprs)])
-         (for* ([i (in-range m)] [j (in-range n)])
-           (vector-set! v (+ (* i n) j)
-                        (vector-ref w (+ (* j m) i))))
-         (vector->flmatrix m n v)))]
-    [(_ m-expr n-expr (clause ...) . defs+exprs)
+       (let* ([m  m-expr] 
+              [n  n-expr]
+              [mn (* m n)]
+              [a (alloc-flmatrix m n)]              
+              [k 0])
+         (for* (clause ... #:break (= k mn)) defs+exprs ... 
+               (ptr-set! a _double* k expr)
+               (set! k (+ k 1)))
+         (flmatrix m n a m)))]
+    [(_ m-expr n-expr (clause ...) defs+exprs ... expr)
      (syntax/loc stx
        (let ([m m-expr] [n n-expr])
-         (vector->flmatrix 
-          m n (for*/vector #:length (* m n) (clause ...) . defs+exprs))))]))
+         (define a     (alloc-flmatrix m n))
+         (define i   0) ; row
+         (define j   0) ; column
+         (define j*m 0)
+         (define stop (* m (- n 1)))
+         (for* (clause ... #:break (= i m)) defs+exprs ...               
+               (ptr-set! a _double* (+ i j*m) expr)
+               (cond [(= j (- n 1)) (set! i   (+ i 1))
+                                    (set! j   0)
+                                    (set! j*m 0)]
+                     [else          (set! j   (+ j 1))
+                                    (set! j*m (+ j*m m))]))
+         (flmatrix m n a m)))]))
 
 (define-syntax (for/flmatrix-sum stx)
   (syntax-case stx ()
