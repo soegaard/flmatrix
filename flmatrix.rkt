@@ -287,15 +287,21 @@
          "expected two matrices with compatible dimensions")
      A B C)))
 
-(define (check-matrix-vector-product-dimensions who A X Y)
+(define (check-matrix-vector-product-dimensions who A X Y transpose-A)
   (define-param (ma na) A)
   (define-param (mx nx) X)
   (define-param (my ny) Y)
-  (unless (if Y 
-              (and (= na mx) (= mx my) (= ny nx 1))
-              (= na mx))
+  (unless (and (= ny nx 1)
+               (if transpose-A
+                 (and (= ma mx) (= na my))
+                 (and (= na mx) (= ma my))))
     (raise-argument-error 
-     who "expected same number of rows" A X Y)))
+     who
+     "expected same number of rows"
+     (list (list ma na)
+           (list mx nx)
+           (list my ny)
+           (list 'transpose-A transpose-A)))))
 
 (define (check-legal-column who j A)
   (unless (<= j (flmatrix-n A))
@@ -798,7 +804,7 @@
   (define X1 (result-flcolumn X))
   (define Y1 (result-flcolumn Y))  
   (check-matrix-vector-product-dimensions 
-   'constant*matrix*vector+constant*vector! A X1 Y1)
+   'constant*matrix*vector+constant*vector! A X1 Y1 transpose-A)
   ; Y := α(AX) +(βY), maybe transpose A first 
   (constant*matrix*vector+constant*vector! 
    alpha A X1 beta Y1 transpose-A))
@@ -806,7 +812,7 @@
 (define (flmatrix*vector A X [Y #f] [alpha 1.0] [beta 1.0] 
                          [transpose-A #f] )
   ; Y := α(AX) +(βY), maybe transpose A first
-  (define Y1 (or Y (make-flmatrix (flmatrix-m A) 1 0.0)))
+  (define Y1 (or Y (make-flmatrix (if transpose-A (flmatrix-n A) (flmatrix-m A)) 1 0.0)))
   (flmatrix*vector! A X Y1 alpha 1.0 transpose-A))
 
 ;;;
@@ -2001,6 +2007,18 @@
                   (list->flmatrix '[[1 0]]))
     (check-equal? (flsubmatrix (flmatrix-identity 3) 2 3 0 0)
                   (list->flmatrix '[[1 0 0] [0 1 0]]))))
+
+  (with-check-info
+    (['test-group "product"])
+    (check-equal?
+     (flmatrix*vector (list->flmatrix '[[1 2 3] [4 5 6]])
+                      (list->flmatrix '[[10] [11] [12]]))
+     (list->flmatrix '[[68] [167]]))
+    (check-equal?
+     (flmatrix*vector (list->flmatrix '[[1 4] [2 5] [3 6]])
+                      (list->flmatrix '[[10] [11] [12]])
+                      #f 1. 1. #t)
+     (list->flmatrix '[[68] [167]])))
 
   (with-check-info
    (['test-group "flmatrix-pointwise.rkt"])
