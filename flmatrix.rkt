@@ -532,32 +532,26 @@
     ; elements in column 0 are generated first, then column 1, ...
     [(_ m-expr n-expr #:column (clause ...) . defs+exprs)
      (syntax/loc stx
-       (let ()
-         (define m  m-expr)
-         (define n  n-expr)
-         (define mn (* m n))
-         (define a  (alloc-flmatrix m n))
-         (for ([k (in-range mn)] clause ...)
+       (let ([m m-expr] [n  n-expr])
+         (define a (alloc-flmatrix m n))
+         (define size (* m n))
+         (for ([idx (in-range size)] clause ...)
            (define x (let () . defs+exprs))
-           (ptr-set! a _double* k x))         
+           (ptr-set! a _double* idx x))
          (flmatrix m n a m)))]
     ; elements in row 0 are generated first, then row 1, ...
     [(_ m-expr n-expr (clause ...) . defs+exprs)
      (syntax/loc stx
-       (let* ([m m-expr]
-              [n n-expr]
-              [a  (alloc-flmatrix m n)]             
-              [i  0]        ; row
-              [j  0]        ; column
-              [jm (* j m)]) 
-         (for ([k (in-range (* m n))] clause ...)
+       (let* ([m m-expr] [n n-expr])
+         (define a (alloc-flmatrix m n))
+         (define idx 0)
+         (define size (* m n))
+         (for ([k (in-range size)] clause ...)
            (define x (let () . defs+exprs))
-           (ptr-set! a _double* k x)
-           (cond [(= j (- n 1)) (set! i  (+ i 1))
-                                (set! j  0)
-                                (set! jm 0)]
-                 [else          (set! j  (+ j 1))
-                                (set! jm (+ jm m))]))
+           (ptr-set! a _double* idx x)
+           (set! idx (+ idx m))
+           (when (>= idx size)
+             (set! idx (+ idx 1 (- size)))))
          (flmatrix m n a m)))]))
 
 ; (for*/flmatrix m n (clause ...) . defs+exprs)
@@ -575,32 +569,27 @@
   (syntax-case stx ()
     [(_ m-expr n-expr #:column (clause ...) . defs+exprs)
      (syntax/loc stx
-       (let* ([m  m-expr] 
-              [n  n-expr]
-              [mn (* m n)]
-              [a (alloc-flmatrix m n)]              
-              [k 0])
-         (for* (clause ... #:break (= k mn))
+       (let* ([m  m-expr] [n  n-expr])
+         (define a (alloc-flmatrix m n))
+         (define idx 0)
+         (define size (* m n))
+         (for* (clause ... #:break (= idx size))
            (define x (let () . defs+exprs))
-           (ptr-set! a _double* k x)
-           (set! k (+ k 1)))
+           (ptr-set! a _double* idx x)
+           (set! idx (+ idx 1)))
          (flmatrix m n a m)))]
     [(_ m-expr n-expr (clause ...) . defs+exprs)
      (syntax/loc stx
        (let ([m m-expr] [n n-expr])
-         (define a  (alloc-flmatrix m n))
-         (define i  0) ; row
-         (define j  0) ; column
-         (define jm 0)
-         (define stop (* m (- n 1)))
-         (for* (clause ... #:break (= i m))
+         (define a (alloc-flmatrix m n))
+         (define idx 0)
+         (define size (* m n))
+         (for* (clause ... #:final (= idx (- size 1)))
            (define x (let () . defs+exprs))
-           (ptr-set! a _double* (+ i jm) x)
-           (cond [(= j (- n 1)) (set! i  (+ i 1))
-                                (set! j  0)
-                                (set! jm 0)]
-                 [else          (set! j  (+ j 1))
-                                (set! jm (+ jm m))]))
+           (ptr-set! a _double* idx x)
+           (set! idx (+ idx m))
+           (when (>= idx size)
+             (set! idx (+ idx 1 (- size)))))
          (flmatrix m n a m)))]))
 
 (define-syntax (for/flmatrix-sum stx)
@@ -2250,7 +2239,7 @@
      (define M (lists->flmatrix '[[1  1  0  3]
                                   [2  1 -1  1]
                                   [3 -1 -1  2]
-                                  [-1  2  3 -1]]))      
+                                  [-1  2  3 -1]]))
      (define-values (P L U) (flmatrix-plu M))
      (with-check-info
       (['test-case 'flmatrix-plu])
