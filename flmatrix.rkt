@@ -324,6 +324,13 @@
   (unless (= m n)
     (raise-argument-error 
      who "square matrix expected" A)))
+
+(define (check-vector who v)
+  (unless (vector? v) (raise-argument-error who "vector expected" v)))
+
+(define (check-integer who x)
+  (unless (integer? x) (raise-argument-error who "integer expected" x)))
+
 ;;;
 ;;; SIZE and DIMENSION
 ;;;
@@ -1948,6 +1955,47 @@
     (define x*  (real->double-flonum x))
     (unsafe-set! a lda i j x*))
   A)
+
+
+(define (flmatrix-map A f)
+  (flmatrix-map! (copy-flmatrix A) f))
+
+(define (flmatrix-make-diagonal v [k 0])
+  ; create a square matrix A with diagonal elements from v
+  ; if k is given, place the elements on the kth digonal,
+  ; k=0 is the main diagonal
+  ; k>0 above the main diagonal
+  ; k<0 below the main diagonal
+  (check-vector  'flmatrix-make-diagonal v)
+  (check-integer 'flmatrix-make-diagonal k)
+  (define s (+ (vector-length v) (abs k)))
+  (define A (make-flmatrix s s))
+  (define-param (m n a lda) A)
+  (cond
+    [(= k 0) (for ([i (in-naturals)] [x (in-vector v)])
+               (define x* (real->double-flonum x))
+               (unsafe-set! a lda i i x*))]
+    [(> k 0) (for ([i (in-naturals)] [x (in-vector v)])
+               (define x* (real->double-flonum x))
+               (unsafe-set! a lda i (+ i k) x*))]
+    [(< k 0) (for ([i (in-naturals)] [x (in-vector v)])
+               (define x* (real->double-flonum x))
+               (unsafe-set! a lda (- i k) i x*))])
+  A)
+
+(define (flmatrix-diagonal A [k 0])
+  ; extract the k'th diagonal of the matrix A
+  (check-flmatrix 'flmatrix-diagonal A)
+  (check-integer  'flmatrix-diagonal k)
+  (define-param (m n a lda) A)
+  (define s (min m n))
+  (cond
+    [(= k 0) (for/vector ([i (in-range s)])
+               (unsafe-ref a lda i i))]
+    [(> k 0) (for/vector ([i (in-range (- s k))])
+               (unsafe-ref a lda i (+ i k)))]
+    [(< k 0) (for/vector ([i (in-range (+ s k))])
+               (unsafe-ref a lda i (- i k)))]))
 
 
 ;;;
