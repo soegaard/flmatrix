@@ -304,7 +304,7 @@
            (list 'transpose-A transpose-A)))))
 
 (define (check-legal-column who j A)
-  (unless (<= j (flmatrix-n A))
+  (unless (< j (flmatrix-n A))
     (raise-argument-error 
      who "column index too large" j))
   (unless (<= 0 j)
@@ -312,7 +312,7 @@
      who "column index must be non-negative")))
 
 (define (check-legal-row who i A)
-  (unless (<= i (flmatrix-m A))
+  (unless (< i (flmatrix-m A))
     (raise-argument-error 
      who "row index too large" i))
   (unless (<= 0 i)
@@ -1833,7 +1833,7 @@
 (define-syntax (flmatrix: stx)
   (syntax-parse stx 
     [(_ [[x0 xs0 ...] [x xs ...] ...])
-     (syntax/loc stx (vectors->flmatrix #[#[x0 xs0 ...] #[x xs ...] ...]))]    
+     (syntax/loc stx (vectors->flmatrix (vector (vector x0 xs0 ...) (vector x xs ...) ...)))]
     [(_ [xs ... (~and [] r) ys ...])
      (raise-syntax-error 'flmatrix: "given empty row" stx #'r)]
     [(_ (~and [] c))
@@ -1843,13 +1843,13 @@
 
 (define-syntax (flrow-matrix stx)
   (syntax-parse stx
-    [(_ [x xs ...]) (syntax/loc stx (flarray: #[#[x xs ...]]))]
+    [(_ [x xs ...]) (syntax/loc stx (flmatrix: [[x xs ...]]))]
     [(_ (~and [] r))
      (raise-syntax-error 'flrow-matrix "given empty row" stx #'r)]))
 
 (define-syntax (flcol-matrix stx)
   (syntax-parse stx 
-    [(_ [x xs ...])      (syntax/loc stx (flarray #[#[x] #[xs] ...]))]
+    [(_ [x xs ...])      (syntax/loc stx (flmatrix: [[x] [xs] ...]))]
     [(_ (~and [] c))
      (raise-syntax-error 'flrow-matrix "given empty column" stx #'c)]))
 
@@ -1937,6 +1937,18 @@
 (define (lists->flmatrix xss)
   (vectors->flmatrix
    (list->vector (map list->vector xss))))
+
+
+(define (flmatrix-map! A f)
+  (define-param (m n a lda) A)
+  (for* ([i (in-range m)]
+         [j (in-range n)])
+    (define aij (unsafe-ref a lda i j))
+    (define x   (f aij))
+    (define x*  (real->double-flonum x))
+    (unsafe-set! a lda i j x*))
+  A)
+
 
 ;;;
 ;;; TEST
@@ -2293,3 +2305,4 @@
                  ([i (in-range m)]
                   [j (in-range n)])
                  (f i j)))
+
