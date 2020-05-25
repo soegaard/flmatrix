@@ -110,7 +110,7 @@
 ; the differences between two entries are
 ; smaller than epsilon, they are considered
 ; equal? . Furthermore if all entries are
-; smaller than epislon flmatrix-zero? 
+; smaller than epsilon flmatrix-zero? 
 ; returns true.
 
 (define current-max-flmatrix-print-size (make-parameter 100))
@@ -158,7 +158,7 @@
          (define aij (unsafe-ref a lda i j))
          (define bij (unsafe-ref b ldb i j))
          (if eps
-             (fl<= (fl- aij bij) eps)
+             (fl<= (flabs (fl- aij bij)) eps)
              (fl= aij bij)))))
 
 ; m = rows, n = cols, a = mxn array of doubles
@@ -331,6 +331,8 @@
 (define (check-integer who x)
   (unless (integer? x) (raise-argument-error who "integer expected" x)))
 
+
+
 ;;;
 ;;; SIZE and DIMENSION
 ;;;
@@ -448,6 +450,13 @@
       (for ([i (* m n)]) (ptr-set! a _double i x*)))
   (flmatrix m n a m))
 
+(define (flmatrix-zeros m n)
+  (make-flmatrix m n 0.0))
+
+(define (flmatrix-ones m n)
+  (make-flmatrix m n 1.0))
+
+
 (define (list->flmatrix xss)
   (define m (length xss))
   (define n (apply max (map length xss)))
@@ -530,12 +539,25 @@
 ;;;
 
 ; (for/flmatrix m n (clause ...) . defs+exprs)
+; (for/matrix (i in m) (j in n) (clauses ...) . body)
 ;    Return an  m x n  flmatrix with elements from the last expr.
 ;    The first n values produced becomes the first row.
 ;    The next n values becomes the second row and so on.
 ;    The bindings in clauses run in parallel.
 (define-syntax (for/flmatrix stx)
-  (syntax-case stx ()
+  (syntax-case stx (in)
+    [(_for/matrix (i in m-expr)  (j in n-expr) #:column (clause ...) . defs+exprs)
+     (syntax/loc stx
+       (let ([m m-expr] [n n-expr])
+         (define a (alloc-flmatrix m n))
+         (define idx 0)
+         (for* ([j (in-range n)]
+                [i (in-range m)]                
+                clause ...)
+           (define x (let () . defs+exprs))
+           (ptr-set! a _double* idx x)
+           (set! idx (+ idx 1)))
+         (flmatrix m n a m)))]
     ; elements in column 0 are generated first, then column 1, ...
     [(_ m-expr n-expr #:column (clause ...) . defs+exprs)
      (syntax/loc stx
@@ -545,6 +567,21 @@
          (for ([idx (in-range size)] clause ...)
            (define x (let () . defs+exprs))
            (ptr-set! a _double* idx x))
+         (flmatrix m n a m)))]
+    [(_for/matrix (i in m-expr) (j in n-expr) (clause ...) . defs+exprs)
+     (syntax/loc stx
+       (let ([m m-expr] [n n-expr])
+         (define size (* m n))
+         (define a (alloc-flmatrix m n))
+         (define idx 0)
+         (for* ([i (in-range m)]
+                [j (in-range n)]                                
+                clause ...)
+           (define x (let () . defs+exprs))
+           (ptr-set! a _double* idx x)
+           (set! idx (+ idx m))
+           (when (>= idx size)
+             (set! idx (+ idx 1 (- size)))))
          (flmatrix m n a m)))]
     ; elements in row 0 are generated first, then row 1, ...
     [(_ m-expr n-expr (clause ...) . defs+exprs)
@@ -858,7 +895,7 @@
   (ptr-set! (ptr-elm a lda i j) _double x))
 
 (define (flmatrix-set! A i j x)
-  (check-legal-row 'flmatrix-set! i A)  
+  (check-legal-row    'flmatrix-set! i A)
   (check-legal-column 'flmatrix-set! j A)
   (define-param (m n a lda) A)
   (define x* (real->double-flonum x))
@@ -964,6 +1001,49 @@
   (flmatrix-swap-columns! B j1 j2)
   B)
 
+(define (flmatrix-flip-left-to-right! A)
+  (check-flmatrix 'flmatrix-flip-left-to-right! A)
+  (define-param (m n a lda) A)
+  (unless (= n 1)
+    (for ([j (in-range (quotient n 2))])
+      (flmatrix-swap-columns! A j (- n j 1))))
+  A)
+
+(define (flmatrix-flip-left-to-right A)
+  (check-flmatrix 'flmatrix-flip-left-to-right A)
+  (define B (copy-flmatrix A))
+  (flmatrix-flip-left-to-right! B)
+  B)
+
+(define (flmatrix-flip-up-to-down! A)
+  (check-flmatrix 'flmatrix-flip-up-to-down! A)
+  (define-param (m n a lda) A)
+  (unless (= m 1)
+    (for ([i (in-range (quotient m 2))])
+      (flmatrix-swap-rows! A i (- m i 1))))
+  A)
+
+(define (flmatrix-flip-up-to-down A)
+  (check-flmatrix 'flmatrix-flip-up-to-down A)
+  (define B (copy-flmatrix A))
+  (flmatrix-flip-up-to-down! B)
+  B)
+
+(define (flmatrix-rotate90 A)
+  ; 1 2 3          3 6 9
+  ; 4 5 6 becomes  2 5 8
+  ; 7 8 9          1 4 7
+  (check-flmatrix 'flmatrix-rotate90 A)
+  (check-square   'flmatrix-rotate90 A)
+  (define-param (m n a lda) A)  
+  (for*/flmatrix n m
+                 ([i (in-range (- n 1) -1 -1)]
+                  [j (in-range (- m 1) -1 -1)])
+                 (flmatrix-ref A (- n j 1) i)))
+
+
+
+
 ;;; Max Absolute Value
 
 (define-cblas* cblas_ixamax _x (s d c z)
@@ -971,6 +1051,7 @@
   ; absolute value in a vector.
   (_fun (n : _int) (X : _flmatrix) (incX : _int)
         -> _int))
+
 
 (define (flmatrix-max-abs-index A)
   (define-param (m n a lda) A)
@@ -997,6 +1078,23 @@
   ; set eps=#f to use normal equal?
   (define val (flmatrix-max-abs-value A))
   (if eps (< (abs val) eps) (zero? val)))
+
+(define (flmatrix-ones? A [eps #f])
+  ; is A a square matrix with ones on the main diaginal and zero elsewhere?
+  (define-param (m n a lda) A)  
+  (and (= m n)
+       (for*/and ([j (in-range n)]
+                  [i (in-range m)])
+         (define aij (unsafe-ref a lda i j))
+         (if (= i j)
+             (if eps
+                 (fl<= (flabs (fl- aij 1.0)) eps)
+                 (fl= aij 1.0))
+             (if eps
+                 (fl<= (flabs aij) eps)
+                 (fl= aij 0.0))))))
+
+
 
 ;;;
 ;;; BLOCK LEVEL OPERATIONS
@@ -1066,6 +1164,13 @@
     (set! i (+ i mb))
     (set! j (+ j nb)))
   (flmatrix m n a lda))
+
+(define (flmatrix-repeat A m [n m])
+  ; Make a matrix with mxn blocks, each block is A.
+  (define row (apply flmatrix-augment (for/list ([i m]) A)))
+  (apply flmatrix-stack (for/list ([j n]) row)))
+  
+  
 
 ;;;
 ;;; NORMS
@@ -1287,6 +1392,18 @@
 (define (flmatrix-svd A)
   (flmatrix-svd! (copy-flmatrix A)))
 
+(define (flmatrix-eigenvalues A)
+  (define B (copy-flmatrix A))
+  (define-values (S V D) (flmatrix-svd! B))
+  (flmatrix->vector V))
+
+(define (flmatrix-eigenvectors A)
+  (define B (copy-flmatrix A))
+  (define-values (S V D) (flmatrix-svd! B))
+  (flmatrix->vector V))
+
+
+
 ;;; QR Factorization
 ; dgeqrfp returns positive entries on the diagonal
 ; for some reason this is missing on macOS, so now dgeqrf is used instead
@@ -1463,6 +1580,10 @@
 (define (vector->flcolumn v)
   (define m (vector-length v))
   (vector->flmatrix m 1 v))
+
+(define (vector->flrow v)
+  (define n (vector-length v))
+  (vector->flmatrix 1 n v))
 
 (define (result-flcolumn c)
   ; convert output to mx1 matrix
@@ -1888,10 +2009,11 @@
    ; DONE matrix-add-scaled-row
    ; DONE ADDED matrix-add-scaled-column
    ; reduction
-   matrix-gauss-eliminate          ; ? use upper in LU ?
-   matrix-gauss-jordan-eliminate   ; ? LU ?
-   matrix-row-echelon-form         ; ? LU ?
-   matrix-reduced-row-echelon-form ; ? LU ?
+   ; (DONE) matrix-gauss-eliminate          ; ? use upper in LU ?
+   ; DONE matrix-gauss-jordan-eliminate     ; ? LU ? Use matrix-gauss-eliminate
+   ; (DONE) matrix-row-echelon-form         ; ? LU ?
+   ; DONE matrix-reduced-row-echelon-form    ; ? LU ? Use matrix-gauss-eliminate
+   
    ; invariant
    ; DONE matrix-rank  (uses SVD!)
    ; DONE matrix-nullity
@@ -1996,6 +2118,106 @@
                (unsafe-ref a lda i (+ i k)))]
     [(< k 0) (for/vector ([i (in-range (+ s k))])
                (unsafe-ref a lda i (- i k)))]))
+
+(define (flmatrix-lower-triangle A [k 0])
+  ; return triangle with elements on or below the k'th diagonal
+  (check-flmatrix 'flmatrix-lower-triangle A)
+  (check-integer  'flmatrix-lower-triangle k)
+  (define B (copy-flmatrix A))
+  (define-param (m n a lda) A)
+  (cond
+    [(= k 0)  (for* ([i (in-range m)]
+                     [j (in-range (+ i 1) n)])
+                (flmatrix-set! B i j 0.0))]
+    [(> k 0)  (for* ([i (in-range m)]
+                     [j (in-range (+ i 1 k) n)])
+                (flmatrix-set! B i j 0.0))]
+    [(< k 0)  (for* ([i (in-range m)]
+                     [j (in-range (max 0 (+ i 1 k)) n)])
+                (flmatrix-set! B i j 0.0))])
+  B)
+
+(define (flmatrix-circulant-matrix v)
+  ; A circulant matrix is a matrix in which each row
+  ; is the previous row shifted one to the right.
+  (define n (vector-length v))
+  (for*/flmatrix n n 
+                ([i (in-range n)]
+                 [j (in-range n)])
+     (vector-ref v (remainder (+ i j) n))))
+
+  
+(define (flmatrix-outer-product A B)
+  ; accept standard vectors as input
+  (define A1 (if (vector? A) (vector->flcolumn A) A))
+  (define B1 (if (vector? B) (vector->flrow    B) B))
+  ; compute outer product between first column of A and first row of B
+  (define-values (am an) (flmatrix-dimensions A1))
+  (define-values (bm bn) (flmatrix-dimensions B1))
+  (for*/flmatrix am bn ([a (in-flcolumn A1 0)]
+                        [b (in-flrow    B1 0)])
+                 (* a b)))
+
+
+; Since the matrix entries of a column are stored contigious,
+; we can use cblas_ixamax with incX=1 to find pivots.
+(define (flmatrix-find-partial-pivot A i j)
+  ; Find the index k of the element a_kj with k>=i
+  ; that has the largest absolute value.
+  ; I.e. a partial pivot in row j.
+  (define-param (m n a lda) A)
+  (define ptr (ptr-elm a lda i j)) ; address of the (i,j)th element.
+  (define idx (cblas_idamax (- m i) ptr 1))
+  (+ i idx))
+
+
+(define (flmatrix-gauss-elim! A [jordan? #f] [unitize-pivot? #f] [pivoting 'partial])
+  (define A-original A)
+  
+  (let loop ([A A] [i 0] [j 0] [without-pivot '()])
+    (define-param (m n a lda) A)
+
+    (define (eliminate-row! i pivot l)
+      ; eliminate row l using row i which has pivot 
+      (define x (unsafe-ref a lda l 0))                   ; first element in row l
+      (flmatrix-add-scaled-row! A l (* -1 (/ x pivot)) i) ; scale and subtract
+      (unsafe-set! a lda l 0 0.0))                        ; exact 0.0
+    
+    (define (eliminate-rows-below! i pivot) (for ([l (in-range (+ i 1) m)]) (eliminate-row! i pivot l)))
+    (define (eliminate-rows-above! i pivot) (for ([l (in-range 0 i)])       (eliminate-row! i pivot l)))
+
+    (define (A-without-first-column) (shared-submatrix! A 0 1 m (- n 1)))
+    
+    (cond
+      [(= n 0) (values A-original (reverse without-pivot))]
+      ;; None of the rest of the columns can have pivots
+      [(= i m) (values A-original (append (reverse without-pivot) (range j (+ j n))))]
+      [else    (define p  (case pivoting
+                            [(partial) (flmatrix-find-partial-pivot A i 0)]
+                            #;[(first)   (flmatrix-find-first-pivot   A 0 0)]
+                            [else (error 'flmatrix-gauss-elim! "unknown pivoting type")]))
+               (define pivot (flmatrix-ref A p 0))
+               (cond                 
+                 [(<= pivot epsilon) ;; no pivot
+                  (loop (A-without-first-column) i (+ j 1) (cons j without-pivot))]
+                 [else               ;; pivot found
+                  (flmatrix-swap-rows! A i p)
+                  (eliminate-rows-below! i pivot)
+                  (when jordan?        (eliminate-rows-above! i pivot))
+                  (when unitize-pivot? (flmatrix-scale-row! A i (/ 1. pivot)))
+                  (loop (A-without-first-column) (+ i 1) (+ j 1) without-pivot)])])))
+
+(define (flmatrix-gauss-elim A [jordan? #f] [unitize-pivot? #f] [pivoting 'partial])
+  (flmatrix-gauss-elim! (copy-flmatrix A) jordan? unitize-pivot? pivoting))
+
+(define (matrix-row-echelon! A [jordan? #f] [unitize-pivot? #f] [pivoting 'partial])
+  (flmatrix-gauss-elim! A jordan? unitize-pivot? pivoting)
+  A)
+
+(define (matrix-row-echelon A [jordan? #f] [unitize-pivot? #f] [pivoting 'partial])
+  (matrix-row-echelon! (copy-flmatrix A) jordan? unitize-pivot? pivoting))
+
+
 
 
 ;;;
