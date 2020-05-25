@@ -82,7 +82,9 @@
      (values cblas-lib lapack-lib)]
     ; UNIX
     [(unix)
-     (define cblas-lib  (ffi-lib "libblas"   '("3" #f)))  ; works on debian
+     (define cblas-lib  (with-handlers
+                          ([exn? (λ (e) (ffi-lib "libblas"   '("3" #f)))]) ; works on Debian
+                          (ffi-lib "libcblas" '("3" #f))))                 ; works on Ubuntu                          
      (define lapack-lib (ffi-lib "liblapack" '("3" #f)))  ; works on debian
      (values cblas-lib lapack-lib)]
     [(windows)
