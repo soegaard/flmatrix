@@ -294,20 +294,19 @@
      A B C)))
 
 (define (check-matrix-vector-product-dimensions who A X Y transpose-A)
+  ; ma x na * mx x nx = ma x nx
   (define-param (ma na) A)
   (define-param (mx nx) X)
   (define-param (my ny) Y)
-  (unless (and (= ny nx 1)
-               (if transpose-A
-                 (and (= ma mx) (= na my))
-                 (and (= na mx) (= ma my))))
+  (when transpose-A (set!-values (ma na) (values na ma)))
+  (unless (= ny nx 1)
     (raise-argument-error 
-     who
-     "expected same number of rows"
-     (list (list ma na)
-           (list mx nx)
-           (list my ny)
-           (list 'transpose-A transpose-A)))))
+     who "expected two column vectors, got: "
+     (list (list mx nx) (list my ny))))  
+  (unless (= na mx)
+    (raise-argument-error 
+     who "expected same number of columns in matrix as there are columns in X"
+     (list (list ma na) (list mx nx) (list 'transpose-A transpose-A)))))
 
 (define (check-legal-column who j A)
   (unless (< j (flmatrix-n A))
