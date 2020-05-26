@@ -276,12 +276,16 @@
   (unless (flmatrix-same-dimensions? A B)
     (raise-argument-error who "expected two matrices of the same size" A B)))
 
-(define (check-product-dimensions who A B [C #f])
+(define (check-product-dimensions who A B [C #f] [transA #f] [transB #f])
+  (define-values (ma na) (flmatrix-dimensions A))
+  (define-values (mb nb) (flmatrix-dimensions B))
+  (when transA (set!-values (ma na) (values na ma)))
+  (when transB (set!-values (mb nb) (values nb mb)))
   (unless (if (not C)
-              (= (flmatrix-n A) (flmatrix-m B))
-              (and (= (flmatrix-n A) (flmatrix-m B))
-                   (= (flmatrix-m A) (flmatrix-m C))
-                   (= (flmatrix-n B) (flmatrix-n C))))
+              (= na mb)
+              (and (= na mb)
+                   (= ma (flmatrix-m C))
+                   (= nb (flmatrix-n C))))
     (raise-argument-error 
      who 
      (if C
@@ -780,8 +784,11 @@
         -> _void))
 
 (define (constant*matrix*matrix+constant*matrix! alpha A B beta C transA transB)
-  ; C := α(A*B)+βC, maybe transpose A and/or B first 
-  (check-product-dimensions 'constant*matrix*matrix+constant*matrix! A B C)
+  ; C := α(A*B)+βC, maybe transpose A and/or B first
+  ; Note: the check fails when the matrices are transposed.
+  ; todo: pass transA and transB to the checker.
+  (check-product-dimensions 'constant*matrix*matrix+constant*matrix!
+                            A B C transA transB)
   (define-param (m n a lda) A)
   (define-param (r s b ldb) B)
   (define-param (x y c ldc) C)
@@ -790,7 +797,10 @@
   (cblas_dgemm CblasColMajor 
                (if transA CblasTrans CblasNoTrans)
                (if transB CblasTrans CblasNoTrans)
-               m s n alpha* 
+               (if transA n m) ; rows in A
+               (if transB r s) ; cols in B
+               (if transA m n) ; cols in A
+               alpha* 
                a lda  b ldb  beta*  c ldc)
   C)
 
@@ -804,8 +814,12 @@
 (define (flmatrix* A B [C #f]
                    [alpha 1.0] [beta 1.0] 
                    [transpose-A #f] [transpose-B #f])
-  ; C := α(A*B)+βC, maybe transpose A and/or B first 
-  (define C1 (or C (make-flmatrix (flmatrix-m A) (flmatrix-n B))))
+  ; C := α(A*B)+βC, maybe transpose A and/or B first
+  (define-values (ma na) (flmatrix-dimensions A))
+  (define-values (mb nb) (flmatrix-dimensions B))
+  (when transpose-A (set!-values (ma na) (values na ma)))
+  (when transpose-B (set!-values (mb nb) (values nb mb)))  
+  (define C1 (or C (make-flmatrix ma nb)))
   (flmatrix*! A B C1 alpha beta transpose-A transpose-B))
 
 ;;; Matrix Power
@@ -1445,8 +1459,8 @@
         (k : (_ptr i _int)) ; number of reflectors
         (a : _flmatrix) ; io
         (lda : (_ptr i _int))
-        (tau : _flmatrix) ; min(m,n)x1        
-        (work : _flmatrix) ; dim max(1,lwork) (x1)
+        (tau : _flmatrix)       ; min(m,n)x1        
+        (work : _flmatrix)      ; dim max(1,lwork) (x1)
         (lwork : (_ptr i _int)) ; >=max(1,n) best with >=n * blocksize
         (info : (_ptr o _int))  ; 
         -> _void
@@ -1457,7 +1471,7 @@
   (define A (copy-flmatrix B))
   (define-param (m n a lda) A)
   (define k (min m n))
-  (define tau (make-flmatrix k k))
+  (define tau (make-flmatrix k 1))
   (define atau (flmatrix-a tau))
   ; first call dgeqrf_ to get a working size
   (define work0 (make-flmatrix 1 1))
@@ -1510,6 +1524,7 @@
         -> (values info work)))
 
 (define (flmatrix-inverse! A)
+  (check-square 'flmatrix-inverse! A)
   ; TODO: this works, but call dgetri with lwork=-1
   ;       to get optimal size of workspace in first
   ;       entry of the work array.
@@ -1556,7 +1571,8 @@
   (check-square flmatrix-cholesky! A)
   (define-param (m n a lda) A)
   (define uplo (if upper? ascii-U ascii-L))
-  (dpotrf_ uplo m a lda))
+  (define info (dpotrf_ uplo m a lda))
+  info)
 
 (define (flmatrix-cholesky A [upper? #t])
   (define B    (copy-flmatrix A))
@@ -1811,6 +1827,7 @@
 
 (define (flmatrix-solve A b)
   ; A matrix, b flcolumn
+  ; called mldivide aka  matrix left divide in Matlab  
   (define-param (m n a lda) (copy-flmatrix A))
   (define bout (copy-flmatrix (result-flcolumn b)))
   (define info (dgesv_ n 1 a lda (flmatrix-a bout) m))
@@ -1839,6 +1856,81 @@
   (define-param (m n) A)  
   (for/list ([j (in-range n)])
     (flmatrix-column A j)))
+
+(define flmatrix-left-divide flmatrix-solve-many)
+  
+(define (linear-fit/plain xs ys)
+  (set! xs (result-flcolumn xs))
+  (set! ys (result-flcolumn ys))
+  ; (check-same-length 'linear-fit xs ys)
+  ; Here xs and ys are column vectors.
+
+  ; Find a and b such that y=ax+b is a good fit to the input data.
+  ; Minimize S = sum( (y - (ax+b))² )
+  
+  ; In vector form, the models is:
+  ;  Y = X β + ε ; where β₁= a and β₂=b
+  ;  X is an mx2 matrix where each is on the form  [x_i 1] (X is the design matrix)
+  ; Multiply with X^T 
+  ;  X^T Y = X^T X β + X^T ε
+  ; Now left divide with X^T X which is a square matrix
+
+  (define-param (mx nx) xs)
+  (define-param (my ny) ys)  
+  (define X      (flmatrix-augment xs (flmatrix-ones mx 1)))
+  (define XT     (flmatrix-transpose X))
+  (define XTX    (flmatrix* XT X))
+  (define XTy    (flmatrix* XT ys))
+  (define β      (flmatrix-left-divide XTX XTy))
+  ; (define resids (flmatrix- ys (flmatrix* X β)))
+  β)
+
+(define (linear-fit/qr xs ys)
+  (set! xs (result-flcolumn xs))
+  (set! ys (result-flcolumn ys))
+  ; (check-same-length 'linear-fit xs ys)
+  ; Here xs and ys are column vectors.
+
+  ; Find a and b such that y=ax+b is a good fit to the input data.
+  ; Minimize S = sum( (y - (ax+b))² )
+  
+  ; In vector form, the models is:
+  ;  Y = X β + ε ; where β₁= a and β₂=b
+  ;  X is an mx2 matrix where each is on the form  [x_i 1] (X is the design matrix)
+
+  ; With X = QR:
+  ;   Q^T Y = Q^T X β + Q^T ε ~ Q^T X β = Q^T Q R β = R β
+  ; Now solve for β.
+  
+  (define-param (mx nx) xs)
+  (define-param (my ny) ys)  
+  (define X      (flmatrix-augment xs (flmatrix-ones mx 1)))
+  ; 1. Compute X = QR
+  (define-values (Q R) (flmatrix-qr X))
+  ; 2. Compute the vector Q^T Y
+  (define QTY (flmatrix* Q ys #f 1.0 1.0 #t))
+  ; 3. Solve upper triangular Rβ = Q^T Y for β.
+  (define β (flmatrix-left-divide R QTY))
+  ; (define resids (flmatrix- ys (flmatrix* X β)))
+  β)
+
+(define (linear-fit-residuals xs ys β)
+  (set! xs (result-flcolumn xs))
+  (set! ys (result-flcolumn ys))
+  (define-param (mx nx) xs)
+  (define X      (flmatrix-augment xs (flmatrix-ones mx 1)))
+  (flmatrix- ys (flmatrix* X β)))
+
+(define (values->list f)
+  (call-with-values f list))
+
+(define (linear-fit xs ys [method 'qr])
+  (match method
+    ['qr    (linear-fit/qr    xs ys)]
+    ['plain (linear-fit/plain xs ys)]
+    [_ (error linear-fit (~a "unknown method, given: " method))]))
+  
+
 
 ;;;
 ;;; SEQUENCES
@@ -1981,6 +2073,12 @@
                    'in-flcolumn "expected (in-flcolumn <flmatrix> <column>)" #'clause #'clause)])))
 
 
+;;;
+;;; Special Matrices
+;;;
+
+; Note: See Matlab gallery for ideas.
+
 (define (flmatrix-vandermonde xs n)
   ; One row for each element of xs.
   ; Each row consist of the first 0..n-1 powers of x.
@@ -1994,6 +2092,7 @@
                  (define αi   (vector-ref αs i ))
                  (vector-set! α^j i (* αi^j αi))
                  αi^j))
+
 
 ;;;
 ;;; SYNTAX
