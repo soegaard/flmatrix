@@ -1342,7 +1342,7 @@
 (define-lapack dgesvd_ 
   ; compute SVD 
   ; A = U * SIGMA * transpose(V)
-  ; SIGMA is an mxm matrix, 
+  ; SIGMA is an mxn matrix, 
   ; Algorith: QR used
   (_fun (jobu : (_ptr i _byte))  ; char: a, s, o or n
         (jobvt : (_ptr i _byte)) ; char
@@ -1402,7 +1402,9 @@
   (define info (dgesvd_ ca ca m n a lda s u m vt n w lwork))
   ; ? TODO: Best way to return error ?
   ; (when (> info 0) (displayln "Warning: no convergence"))
-  (values U S VT))
+  ; S is column vector of singular values
+  ; Turn S into SIGMA (mxn) by placing the values of S on the diagonal.
+  (values U S VT)) 
 
 (define (flmatrix-svd A)
   (flmatrix-svd! (copy-flmatrix A)))
@@ -1417,6 +1419,19 @@
   (define-values (S V D) (flmatrix-svd! B))
   (flmatrix->vector V))
 
+(define (flmatrix-diagonal-from-singular-values m n S [reciproc? #f])
+  (define A (flmatrix-zeros m n))
+  (for ([i (in-range m)]
+        [s (in-flcolumn S)])
+    (flmatrix-set! A i i (if reciproc? (/ 1 s) s)))
+  A)
+
+(define (flmatrix-pseudo-inverse A)
+  (define-param (m n) A)
+  (define-values (U S VT) (flmatrix-svd A))
+  (define Σ  (flmatrix-diagonal-from-singular-values m n S #t))
+  (define A+ (flmatrix* (flmatrix-transpose VT) (flmatrix* Σ (flmatrix-transpose U))))
+  A+)
 
 
 ;;; QR Factorization
