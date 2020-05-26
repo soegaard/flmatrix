@@ -1522,6 +1522,49 @@
 (define (flmatrix-inverse A)
   (flmatrix-inverse! (copy-flmatrix A)))
 
+
+;;;
+;;; Cholesky Factorization
+;;;
+
+; A = U^T U or A = L L^T
+; where L is lower triangular
+;       U is upper triangular.
+;  and  A is a square, real symmetric, positive definite matrix A.
+
+(define-lapack dpotrf_ 
+  ; http://www.netlib.org/lapack/double/dpotrf.f
+  ;  DPOTRF computes the Cholesky factorization of a real symmetric
+  ;  positive definite matrix A.
+  ;
+  ;  The factorization has the form
+  ;     A = U**T * U,  if UPLO = 'U', or
+  ;     A = L  * L**T,  if UPLO = 'L',
+  ;  where U is an upper triangular matrix and L is lower triangular.
+  (_fun (uplo : (_ptr i _byte))          ; 'U' or 'L'
+        (n    : (_ptr i _int))
+        (a    : _flmatrix)
+        (lda  : (_ptr i _int))
+        (info : (_ptr o _int)) 
+        -> _void
+        -> info))
+
+(define ascii-U 85)
+(define ascii-L 76)
+
+(define (flmatrix-cholesky! A [upper? #t])
+  (check-square flmatrix-cholesky! A)
+  (define-param (m n a lda) A)
+  (define uplo (if upper? ascii-U ascii-L))
+  (dpotrf_ uplo m a lda))
+
+(define (flmatrix-cholesky A [upper? #t])
+  (define B    (copy-flmatrix A))
+  (define info (flmatrix-cholesky! B upper?))
+  (if upper?
+      (flmatrix-extract-upper B)
+      (flmatrix-extract-lower B)))
+
 ;;;
 ;;; INVARIANTS
 ;;; 
