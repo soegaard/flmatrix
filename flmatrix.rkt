@@ -2376,8 +2376,105 @@
   (matrix-row-echelon! (copy-flmatrix A) jordan? unitize-pivot? pivoting))
 
 
+;;;
+;;; HIGH LEVEL
+;;;
+
+(define (mat? A) (flmatrix? A))
+(define (row? A)  (and (flmatrix? A) (flmatrix-row-vector? A)))
+(define (col? A)  (and (flmatrix? A) (flmatrix-column-vector? A)))
+
+(define (row A i)   (flmatrix-row    A i))
+(define (col A i)   (flmatrix-column A i))
+(define (ref A i j) (flmatrix-ref    A i j))
+
+(define (shape A)   (list (flmatrix-m A) (flmatrix-n A)))
+(define (size  A)   (flmatrix-size A))
+(define (nrows A)   (flmatrix-m A))
+(define (ncols A)   (flmatrix-n A))
+
+(define (f64vector->flmatrix v [transpose? #f])
+  (define m (f64vector-length v))
+  (define n 1)
+  (define lda 1)
+  (define a (cast (f64vector->cpointer v) _pointer _flmatrix))
+  (if transpose?
+      (flmatrix n m a lda)
+      (flmatrix m n a lda)))
+
+(define (matrix x)
+  (cond
+    [(vector? x)    (cond
+                      ; vector of vector
+                      [(vector? (vector-ref x 0)) (vectors->flmatrix x)]
+                      ; a single vector represents a column vector
+                      [else                       (vector->flcolumn x)])]
+    [(list? x)      (cond
+                      ; list of lists
+                      [(list? (first x))          (list->flmatrix x)]
+                      [else                       (apply flcolumn x)])]
+    [(f64vector? x) (copy-flmatrix (matrix! x))]
+    [else (error)]))
+
+(define (matrix! x)
+  (cond
+    [(f64vector? x) (f64vector->flmatrix x)]
+    [else
+     (error 'matrix! "expected an f64vector as input")]))
+
+(provide f64vector)
+
+(define (mset! A i j x) (flmatrix-set! A i j x))
+
+(define (zeros m [n m])    (flmatrix-zeros m n))
+(define (ones  m [n m])    (flmatrix-ones  m n))
+(define (make m n [x 0.0]) (make-flmatrix m n [x 0.0]))
+
+(define (do-arange start stop step transpose?)
+  (define len (inexact->exact (ceiling (/ (- stop start) step))))
+  (define v (make-f64vector len))
+  (for ([x (in-range (* 1.0 start) (* 1.0 stop) (* 1. step))]
+        [k (in-naturals)])
+    (f64vector-set! v k x))
+  (f64vector->flmatrix v transpose?))
+
+(define (colarange start [stop #f] [step 1.0])
+  (cond [stop (do-arange start stop step #f)]
+        [else (colarange 0. start step)]))
+
+(define (arange start [stop #f] [step 1.0])
+  (cond [stop (do-arange start stop step #t)]
+        [else (arange 0. start step)]))
 
 
+(define (reshape A m n)
+  (reshape! (copy-flmatrix A) m n))
+  
+(define (reshape! A m n)
+  (define-param (M N a lda) A)
+  (unless (<= (* M N) (* m n))
+    (error 'reshape! "the size of the new shape is larger than the original matrix"))  
+  (cond
+    [(= lda 1) ; A is a row vector => no gaps
+     (flmatrix m n a m)]
+    [(= lda m) ; no gap between each column
+     (flmatrix m n a m)]
+    ; [if ... M N m n ... has a nice relationship then ...]
+    [else
+     (error 'reshape! "not able to reshape")]))
+
+(define (transpose A) (flmatrix-transpose A))
+
+(define (linspace start stop [num 50] [endpoint #t])
+  (define step (/ (- stop start) (* 1.0 (- num 1))))
+  (define len (if endpoint num (- num 1)))
+  (define v (make-f64vector len))
+  (for/list ([k (in-range len)])
+    (define x (+ start (* k step)))
+    (f64vector-set! v k x))
+  (f64vector->flmatrix v))
+
+  
 ;;;
 ;;; TEST
 ;;;
