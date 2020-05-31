@@ -3,6 +3,7 @@
 @(require scribble/example)
 @(define reference.scrbl '(lib "scribblings/reference/reference.scrbl"))
 @(define math.scrbl      '(lib "math/scribblings/math.scrbl"))
+@(require (for-label racket/base ffi/vector ffi/unsafe))
 
 @title[#:tag "flmatrix"]{Flmatrix: Floating Point Matrices}
 
@@ -40,9 +41,9 @@ during a computation.
 
 The available operations can be divided into rough categories:
 @itemlist[
-  @item{Level 1:  High level   - do what I mean}
-  @item{Level 2:  Median level - do what I mean this way}
-  @item{Level 3:  Low level    - do it using this underlying C-function}]
+  @item{Level 1:  High   level - do what I mean}
+  @item{Level 2:  Medium level - do what I mean this way}
+  @item{Level 3:  Low    level - do it using this underlying C-function}]
 
 To use the library one can get by with level 1 operations, but if you understand
 the underlying representation, you can improve your algorithms using 
@@ -481,7 +482,7 @@ each element @racket[a] of @racket[A] with a copy of @racket[B] scaled with @rac
 The Kronecker product is a generalization of the outer product.
 
 @bold[@racket[(kron A B)]] @linebreak[]
-Computes the Kronercker product of the matrices @racket[A] and @racket[B].
+Computes the Kronecker product of the matrices @racket[A] and @racket[B].
 
 @examples[#:eval quick-eval
           (define A (matrix '((1 2) (3 4))))
@@ -736,7 +737,7 @@ and @racket[libcblas], so get the latter. However on Debian it turns
 out @racket[libblas] is exporting the names used by CBLAS, so
 (either?) ought to be fine.
 
-On Windows: A tester is needed. Install CLASS and LAPACK and let
+On Windows: A tester is needed. Install CBLAS and LAPACK and let
 me know if it works. Otherwise make an Issue at Github and we
 will add the proper paths.
 
