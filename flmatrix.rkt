@@ -51,7 +51,8 @@
          (for-syntax 
           racket/format
           racket/string
-          ffi/unsafe))
+          ffi/unsafe
+          racket/syntax))
 
 ;;;
 ;;; LIBRARIES
@@ -276,6 +277,16 @@
   (unless (flmatrix-same-dimensions? A B)
     (raise-argument-error who "expected two matrices of the same size" A B)))
 
+(define (check-all-matrices-same-size who AS)
+  (set! AS (filter flmatrix? AS))
+  (when (not( empty? AS))
+    (unless (and (apply = (map flmatrix-m AS))
+                 (apply = (map flmatrix-n AS)))
+      (raise-argument-error 
+       who 
+       "All input matrices are expected to have the same dimensions."
+       AS))))
+
 (define (check-product-dimensions who A B [C #f] [transA #f] [transB #f])
   (define-values (ma na) (flmatrix-dimensions A))
   (define-values (mb nb) (flmatrix-dimensions B))
@@ -291,7 +302,7 @@
      (if C
          "expected three matrices with compatible dimensions"
          "expected two matrices with compatible dimensions")
-     A B C)))
+     (list (map (λ (A) (flmatrix-dimensions A #t)) (list A B C)) (list A B C)))))
 
 (define (check-matrix-vector-product-dimensions who A X Y transpose-A)
   ; ma x na * mx x nx = ma x nx
@@ -347,10 +358,12 @@
   (define-param (m n) A)
   (* m n))
 
-(define (flmatrix-dimensions A)
+(define (flmatrix-dimensions A [as-list? #f])
   (check-flmatrix 'flmatrix-dimensions A)
   (define-param (m n) A)
-  (values m n))
+  (if as-list?
+      (list m n)
+      (values m n)))
 
 (define (flmatrix-same-dimensions? A B)
   (define-param (ma na) A)
@@ -1225,6 +1238,86 @@
   AT)
 
 ;;;
+;;; Eigenvalues and Eigenvectors
+;;;
+
+(define-lapack dgeev_ 
+  ; http://www.netlib.org/lapack/lapack-3.1.1/html/dgeev.f.html
+  ; DGEEV computes for an N-by-N real nonsymmetric matrix A, the
+  ; eigenvalues and, optionally, the left and/or right eigenvectors.
+  ;
+  ; The right eigenvector v(j) of A satisfies
+  ;                   A * v(j) = lambda(j) * v(j)
+  ; where lambda(j) is its eigenvalue.
+  ; The left eigenvector u(j) of A satisfies
+  ;                u(j)**H * A = lambda(j) * u(j)**H
+  ; where u(j)**H denotes the conjugate transpose of u(j).
+  ;
+  ; The computed eigenvectors are normalized to have Euclidean norm
+  ; equal to 1 and largest component real.
+
+  (_fun (jobvl : (_ptr i _byte)) ; char 'N' or 'V'
+        (jobvr : (_ptr i _byte)) ; char 'N' or 'V'
+        (n     : (_ptr i _int))  ; order of a
+        (a     : _flmatrix)      ; io: the matrix
+        (lda   : (_ptr i _int))  
+        (wr    : _flmatrix)      ; out: real part of eigenvalues
+        (wi    : _flmatrix)      ; out: imag part of eigenvalues
+        (vl    : _flmatrix)      ; left eigenvectors
+        (ldvl  : (_ptr i _int))
+        (vr    : _flmatrix)      ; right eigenvectors
+        (ldvr  : (_ptr i _int))
+        (work  : _flmatrix)      ; dim max(1,lwork)
+        (lwork : (_ptr i _int))  ; dim >= 4n 
+        (info  : (_ptr o _int))
+        -> _void
+        -> info))
+
+(define (flmatrix-eigenvalues-and-vectors!
+         A #:left [left? #f] #:right [right? #f] #:overwrite [overwrite? #f])
+  (define A0 A)
+  (set! A (if overwrite? A (copy-flmatrix A)))
+  (define jobvl (char->integer (if left?  #\V #\N)))
+  (define jobvr (char->integer (if right? #\V #\N)))
+  (define-param (m n a lda) A)
+  (define WR (make-flmatrix n 1))
+  (define WI (make-flmatrix n 1))
+  (define wr (flmatrix-a WR))
+  (define wi (flmatrix-a WI))
+  (define VL (if left?  (make-flmatrix n n) (make-flmatrix 1 1)))
+  (define VR (if right? (make-flmatrix n n) (make-flmatrix 1 1)))
+  (define-param (mvl nvl vl ldvl) VL)
+  (define-param (mvr nvr vr ldvr) VR)
+  (define lwork (max 1 (* 4 n)))
+  (define WORK  (make-flmatrix lwork 1))
+  (define work  (flmatrix-a WORK))
+  (define info (dgeev_ jobvl jobvr n a lda wr wi vl ldvl vr ldvr work lwork))
+  ; (when (> info 0) (displayln "Warning: no convergence"))
+  (values A0 WR WI VL VR info))
+
+(define (real+imaginary->vector X Y)
+  ; Convert two vectors of same length with real and imaginary
+  ; part to a Racket vector of imaginary numbers.
+  (define who 'real+imaginary->vector)
+  (set! X (result-flcolumn X))
+  (set! Y (result-flcolumn Y))
+  (define-param (mx nx x ldx) X)
+  (define-param (my ny y ldy) Y)
+  (unless (and (= mx my) (= nx ny 1))
+    (raise-argument-error 
+       who  "The two inputs must be vectors of the same length" (list X Y)))
+  (for/vector #:length mx
+      ([xi (in-flcolumn X)]
+       [yi (in-flcolumn Y)])
+    (if (zero? yi)
+        xi
+        (make-rectangular xi yi))))
+
+
+
+
+
+;;;
 ;;; MATRIX DECOMPOSITIONS
 ;;;
 
@@ -1306,7 +1399,7 @@
   (define B (copy-flmatrix A))
   (define-values (ps info) (flmatrix-lu! B))
   (define P (pivots->flmatrix ps))
-  (define L (flmatrix-extract-lower B))
+  (define L (flmatrix-extract-lower/ones B))
   (define U (flmatrix-extract-upper B))
   ; TODO: What to do with info?
   (values P L U))
@@ -1324,7 +1417,7 @@
     (flmatrix-set! U i j (flmatrix-ref A i j)))
   U)
 
-(define (flmatrix-extract-lower A)
+(define (flmatrix-extract-lower/ones A)
   ; extract the lower matrix, 
   ; and insert ones on diagonal
   (define L (copy-flmatrix A))
@@ -1335,6 +1428,16 @@
     (flmatrix-set! L i j 0))
   (for* ([j (in-range (min m n))])
     (flmatrix-set! L j j 1.0))
+  L)
+
+(define (flmatrix-extract-lower A)
+  ; extract the lower matrix including the diagonal
+  (define L (copy-flmatrix A))
+  (define-param (m n) A)
+  ; TODO: use unsafe-ref or unsafe-vector-copy
+  (for* ([j (in-range 1 n)]
+         [i (in-range 0 j)])
+    (flmatrix-set! L i j 0))
   L)
 
 ;;; SVD - Singular Value Decomposition
@@ -1401,6 +1504,7 @@
   (define ca (char->integer #\A))
   (define info (dgesvd_ ca ca m n a lda s u m vt n w lwork))
   ; ? TODO: Best way to return error ?
+  ; (displayln (list 'info-from-svd info))
   ; (when (> info 0) (displayln "Warning: no convergence"))
   ; S is column vector of singular values
   ; Turn S into SIGMA (mxn) by placing the values of S on the diagonal.
@@ -1409,12 +1513,7 @@
 (define (flmatrix-svd A)
   (flmatrix-svd! (copy-flmatrix A)))
 
-(define (flmatrix-eigenvalues A)
-  (define B (copy-flmatrix A))
-  (define-values (S V D) (flmatrix-svd! B))
-  (flmatrix->vector V))
-
-(define (flmatrix-eigenvectors A)
+(define (flmatrix-singular-values A)
   (define B (copy-flmatrix A))
   (define-values (S V D) (flmatrix-svd! B))
   (flmatrix->vector V))
@@ -1430,7 +1529,10 @@
   (define-param (m n) A)
   (define-values (U S VT) (flmatrix-svd A))
   (define Σ  (flmatrix-diagonal-from-singular-values m n S #t))
-  (define A+ (flmatrix* (flmatrix-transpose VT) (flmatrix* Σ (flmatrix-transpose U))))
+  (displayln (map (λ (A) (flmatrix-dimensions A #t))
+                  (list (flmatrix-transpose VT) Σ (flmatrix-transpose U))))
+  (displayln (list (flmatrix-transpose VT) Σ (flmatrix-transpose U)))
+  (define A+ (flmatrix* (flmatrix-transpose VT) (flmatrix* (transpose Σ) (flmatrix-transpose U))))
   A+)
 
 
@@ -1581,14 +1683,14 @@
 (define ascii-U 85)
 (define ascii-L 76)
 
-(define (flmatrix-cholesky! A [upper? #t])
+(define (flmatrix-cholesky! A [upper? #f])
   (check-square flmatrix-cholesky! A)
   (define-param (m n a lda) A)
   (define uplo (if upper? ascii-U ascii-L))
   (define info (dpotrf_ uplo m a lda))
   info)
 
-(define (flmatrix-cholesky A [upper? #t])
+(define (flmatrix-cholesky A [upper? #f])
   (define B    (copy-flmatrix A))
   (define info (flmatrix-cholesky! B upper?))
   (if upper?
@@ -1660,11 +1762,16 @@
   (define n (vector-length v))
   (vector->flmatrix 1 n v))
 
+(define (list->flcolumn xs)
+  (vector->flcolumn (list->vector xs)))
+
 (define (result-flcolumn c)
   ; convert output to mx1 matrix
   (if (vector? c)
       (vector->flcolumn c)
-      c))
+      (if (list? c)
+          (list->flcolumn c)
+          c)))
 
 (define (flcolumn . xs)
   ; TODO: skip intermediary vector
@@ -1854,6 +1961,7 @@
   (define-param (m n a lda) A)
   (define-param (_ nrhs b ldb) B)
   (define info (dgesv_ n nrhs a lda b ldb))
+  (displayln (list 'flmatrix-solve-many! info))
   ; ? TODO: handle info
   (values B))
 
@@ -1872,7 +1980,98 @@
     (flmatrix-column A j)))
 
 (define flmatrix-left-divide flmatrix-solve-many)
+
+
+;;;
+;;; LINEAR LEAST SQUARES PROBLEM
+;;;
+
+(define-lapack dgelsd_ ; Double, GEneral, Least Square 
+  ; minimize 2-norm(| b - A*x |)  where b and x are columns in B and X
+  ; See http://www.netlib.org/lapack/lapack-3.1.1/html/dgelsd.f.html
+  ; B is overwritten with the result.
+  (_fun (m     : (_ptr i _int))     ; m>=0 rows of A
+        (n     : (_ptr i _int))     ; n>=0 cols of A
+        (nrhs  : (_ptr i _int))     ; number of rhs (number of cols in B and X)
+        (a     :  _flmatrix) ; io   ; is overwritten
+        (lda   : (_ptr i _int))     ; lda >= max(1,m)
+        (b     :  _flmatrix) ; io   ; mxnrhs 
+        (ldb   : (_ptr i _int))     ; ldb >= max(1,max(m,n))
+        (s     :  _flmatrix)        ; min(m,n) x 1  singular values of A in decreasing order
+        ;                           ; the condition number of A is 2-norm of S(1)/S(min(m,n)
+        (rcond : (_ptr i _double))  ; singular values S(i)<=rcond*S(1) is treated as 0.
+        ;                           ; if rcond<0 then machine precision is used instead
+        (rank  : (_ptr o _int))     ; effective rank of A (number of non-zero singular values 
+        ;                           ; greater than rcond*s(1)
+        (work  :  _flmatrix)        ; dim max(1,lwork) x1
+        (lwork : (_ptr i _int))     ; dimension of work - use work query to find proper size
+        (iwork : _pointer)          ; array of int   dim max(1,liwork)x1
+        ;                           ;  LIWORK >= 3 * MINMN * NLVL + 11 * MINMN,
+        ;                           ;  where MINMN = MIN( M,N ).
+        (info : (_ptr o _int))      ; =0 succes exit, >0 svd failed to converge
+        -> _void
+        -> (values info rank)))
+
+(define (lstsq A B)
+  (define-param (mb nb aB ldB ) B) ; nb = nrhs
+  ; Least squares solution to |Ax-b| minimizing |x| for each column in B.
+  ; The common case is m>=n and rank(A)=n in which we get a solution to an overdetermined system.
+  ; If m<n and rank(A)=m there are an infinite number of solutions.
+  ; This routine will then find the solution x with minimal norm.
+
+  ; We assume that A has full rank (that is rank min(m,n)).
+  ;   A is mxn
+  ;   b is mx1  B is mxk
+  ;   x is nx1  X is nxk
+  ; If the solution x is taller than b (that is n>m) then we need
+  ; insert some zeros below B.
+
+  ; In the text the case n>m one sees the driver dgelsd expects B
+  ; to have ldb>=max(1,m,n) normally ldb>=rows in B = m ,
+  ; so if n<m then B must be enlarged with extra rows.
   
+  ; 1. Copy A, the driver will/can destroy A
+  (define A0 (copy-flmatrix A))
+  (define-param (m   n   a  lda)  A0)
+  ; 2. Enlarge B into X
+  (define X  (cond [(>= nb m) (copy-flmatrix B)]
+                   [else      (make-flmatrix m nb)]))
+  (define-param (_ nrhs b ldb) X)
+  (when (< nb m)
+    ; The result vectors are stored in B (or the copy of B).
+    ; If the result vectors are B was enlarged, so we need to copy B into X
+    (unsafe-matrix-copy! mb nb aB ldB b ldb))
+  ; (displayln (list ldb (max m n) (= ldb (max m n))))
+  ; 3. Allocate array for the singular values
+  (define S (make-flmatrix (min m n) 1))
+  (define s (flmatrix-a S))
+  ; 4. The condition number -1.0 indicates machine precision.
+  ;    Note: Numpy uses machine precision times mxn.
+  (define rcond -1.0)
+  ; 5. The size of the working are is determined by calling the driver dgelsd with lwork=-1.
+  (define work0  (make-flmatrix 1 1)) ; first entry will contain optimal length of work
+  (define awork0 (flmatrix-a work0))  
+  (define lwork0 -1)  
+  (define iwork0 (malloc 1 _int 'atomic))
+  ; (displayln  (list m n nrhs a lda b ldb s rcond awork0 lwork0 iwork0))
+  (define-values (__ ___) ; 
+    (dgelsd_ m n nrhs a lda b ldb s rcond awork0 lwork0 iwork0))  
+  (define lwork (inexact->exact (flmatrix-ref work0 0 0)))
+  ; (displayln (list 'lwork lwork))
+  ; 6. Prepare the actual call 
+  ;(define nlvl  (max 0 (+ 1 (ceiling (log2 (/ (min m n) (+ SMLSIZ 1)))))))
+  (define nlvl 32) ; 
+  (define liwork (max 1 (+ (* 3 (min m n) nlvl) (* 11 (min m n)))))
+  (define iwork  (malloc liwork _int 'atomic))    ; integer array 
+  (define WORK   (make-flmatrix (max 1 lwork) 1))
+  (define work   (flmatrix-a WORK))
+  ;(displayln (list m n nrhs a lda b ldb s rcond work lwork iwork))
+  (define-values (info rank) 
+    (dgelsd_ m n nrhs a lda b ldb s rcond work lwork iwork))
+  (shared-submatrix! X 0 0 n nrhs))
+
+
+
 (define (linear-fit/plain xs ys)
   (set! xs (result-flcolumn xs))
   (set! ys (result-flcolumn ys))
@@ -2393,6 +2592,11 @@
 (define (nrows A)   (flmatrix-m A))
 (define (ncols A)   (flmatrix-n A))
 
+(define augment flmatrix-augment)
+(define stack   flmatrix-stack)
+(define repeat  flmatrix-repeat)
+
+
 (define (f64vector->flmatrix v [transpose? #f])
   (define m (f64vector-length v))
   (define n 1)
@@ -2401,6 +2605,9 @@
   (if transpose?
       (flmatrix n m a lda)
       (flmatrix m n a lda)))
+
+(define (column . xs)
+  (matrix (map list xs)))
 
 (define (matrix x)
   (cond
@@ -2429,6 +2636,14 @@
 (define (zeros m [n m])    (flmatrix-zeros m n))
 (define (ones  m [n m])    (flmatrix-ones  m n))
 (define (make m n [x 0.0]) (make-flmatrix m n [x 0.0]))
+(define (constant! A x)
+  (define x* (real->double-flonum x))
+  (define-param (m n a lda) A)
+  (for* ([i (in-range m)] [j (in-range n)])
+    (unsafe-set! a lda i j x*)))
+(define (zeros! A) (constant! A 0.0))
+(define (ones!  A) (constant! A 1.0))
+
 
 (define (do-arange start stop step transpose?)
   (define len (inexact->exact (ceiling (/ (- stop start) step))))
@@ -2452,8 +2667,9 @@
   
 (define (reshape! A m n)
   (define-param (M N a lda) A)
-  (unless (<= (* M N) (* m n))
-    (error 'reshape! "the size of the new shape is larger than the original matrix"))  
+  (unless (<= (* m n) (* M N))
+    (error 'reshape!
+           "the size of the new shape is larger than the original matrix"))
   (cond
     [(= lda 1) ; A is a row vector => no gaps
      (flmatrix m n a m)]
@@ -2474,7 +2690,329 @@
     (f64vector-set! v k x))
   (f64vector->flmatrix v))
 
+(define (sub! A i j r s) (shared-submatrix! A i j r s))
+  ; return rxs matrix with upper left corner (i,j)
+  ; entries are shared with A
+(define (sub A i j m n) (flsubmatrix A m n i j))
+  ; return a the mxn submatrix of with upper  left corner in (i,j)
+
+
+;;;
+;;; Pointwise Operations
+;;;
+
+(define-syntax (define-pointwise-unary stx)
+  (syntax-parse stx
+    [(_define-pointwise f:id)
+     (with-syntax ([.f! (format-id #'f ".~a!" (syntax-e #'f))]
+                   [.f  (format-id #'f ".~a"  (syntax-e #'f))])
+       (syntax/loc stx
+         (begin
+           (define (.f! A [C #f])         
+             (when (flmatrix? C) (check-same-dimensions A C '.f))
+             (unless C (set! C A))
+             (define-param (m n a lda) A)
+             (define-param (_ __ c ldc) C)
+             (for* ([i (in-range m)]
+                    [j (in-range n)])
+               (define aij (unsafe-ref a lda i j))
+               (define x (f aij))
+               (unsafe-set! c ldc i j x))
+             C)
+           (define (.f A)
+             (.f! (copy-flmatrix A))))))]))
+
+(define-syntax (define-pointwise-unaries stx)
+  (syntax-parse stx
+    [(_ f:id ...)
+     (syntax/loc stx
+       (begin
+         (define-pointwise-unary f) ...))]))
+
+(define-pointwise-unaries sin cos tan sqr sqrt log exp)
+
+(define-syntax (define-pointwise-binary stx)
+  (syntax-parse stx
+    [(_define-pointwise f:id)
+     (with-syntax ([.f! (format-id #'f ".~a!" (syntax-e #'f))]
+                   [.f  (format-id #'f ".~a"  (syntax-e #'f))])
+       (syntax/loc stx
+         (begin
+           (define (.f! A B [C #f])
+             (cond
+               [(and (flmatrix? A) (flmatrix? B))
+                (check-same-dimensions A B '.f!)
+                (when (flmatrix? C) (check-same-dimensions A C '.f!))
+                (unless C (set! C A))
+                (define-param (m n  a lda) A)
+                (define-param (M N  b ldb) B)             
+                (define-param (_ __ c ldc) C)             
+                (for* ([i (in-range m)]
+                       [j (in-range n)])
+                  (define aij (unsafe-ref a lda i j))
+                  (define bij (unsafe-ref b ldb i j))
+                  (define x (f aij bij))
+                  (unsafe-set! c ldc i j x))
+                C]
+               [(number? A) ; now C needs to be an flmatrix
+                (unless (flmatrix? C)
+                  (error (error '.! "if A is a constant, C must be a flmatrix")))                
+                (cond [(flmatrix? B) (define-param (m n  b ldb) B)
+                                     (.f! (make-flmatrix m n A) B C)]
+                      [else (error '.! "wrong input types")])]
+               [(number? B)
+                (cond [(flmatrix? A)
+                       (when (flmatrix? C) (check-same-dimensions A C '.f!))
+                       (unless C (set! C A))
+                       (define-param (m n  a lda) A)
+                       (define-param (_ __ c ldc) C)             
+                       (for* ([i (in-range m)]
+                              [j (in-range n)])
+                         (define aij (unsafe-ref a lda i j))
+                         (define x (f aij B))
+                         (unsafe-set! c ldc i j x))
+                       C]
+                      [else (error '.! "wrong input types")])]))
+           (define (.f A B)
+             (cond
+               [(flmatrix? A) (.f! A B (copy-flmatrix A))]
+               [(flmatrix? B) (.f! A B (copy-flmatrix B))]
+               [else          (flmatrix 1 1 (f A B))])))))]))  
+
+(define-syntax (define-pointwise-binaries stx)
+  (syntax-parse stx
+    [(_ f:id ...)
+     (syntax/loc stx
+       (begin
+         (define-pointwise-binary f) ...))]))
+
+(define-pointwise-binaries + * expt)
+
+(define-syntax (define-pointwise-unary/binary stx)
+  (syntax-parse stx
+    [(_define-pointwise f:id)
+     (with-syntax ([.f! (format-id #'f ".~a!" (syntax-e #'f))]
+                   [.f  (format-id #'f ".~a"  (syntax-e #'f))])
+       (syntax/loc stx
+         (begin
+           (define (.f! A [B #f] [C #f])
+             (cond
+               [B ; binary
+                (cond
+                  [(and (flmatrix? A) (flmatrix? B))
+                   (check-same-dimensions A B '.f!)
+                   (when (flmatrix? C) (check-same-dimensions A C '.f!))
+                   (unless C (set! C A))
+                   (define-param (m n  a lda) A)
+                   (define-param (M N  b ldb) B)             
+                   (define-param (_ __ c ldc) C)             
+                   (for* ([i (in-range m)]
+                          [j (in-range n)])
+                     (define aij (unsafe-ref a lda i j))
+                     (define bij (unsafe-ref b ldb i j))
+                     (define x (f aij bij))
+                     (unsafe-set! c ldc i j x))
+                   C]
+                  [(number? A) ; now C needs to be an flmatrix
+                   (unless (flmatrix? C)
+                     (error (error '.! "if A is a constant, C must be a flmatrix")))                
+                   (cond [(flmatrix? B) (define-param (m n  b ldb) B)
+                                        (.f! (make-flmatrix m n A) B C)]
+                         [else (error '.! "wrong input types")])]
+                  [(number? B)
+                   (cond [(flmatrix? A)
+                          (when (flmatrix? C) (check-same-dimensions A C '.f!))
+                          (unless C (set! C A))
+                          (define-param (m n  a lda) A)
+                          (define-param (_ __ c ldc) C)             
+                          (for* ([i (in-range m)]
+                                 [j (in-range n)])
+                            (define aij (unsafe-ref a lda i j))
+                            (define x (f aij B))
+                            (unsafe-set! c ldc i j x))
+                          C]
+                         [else (error '.! "wrong input types")])])]
+               ; B is #f
+               [else  ; unary with result to A or C
+                (unless C (set! C A))
+                (check-same-dimensions A C '.f!)
+                (define-param (m n  a lda) A)
+                (define-param (_ __ c ldc) C)
+                (for* ([i (in-range m)]
+                       [j (in-range n)])
+                  (define aij (unsafe-ref a lda i j))
+                  (define x (f aij))
+                  (unsafe-set! c ldc i j x))
+                C]))           
+           (define (.f A [B #f])
+             (if B
+                 (.f! A B (copy-flmatrix A))
+                 (.f! (copy-flmatrix A) B))))))]))
+    
+(define-syntax (define-pointwise-unary/binaries stx)
+  (syntax-parse stx
+    [(_ f:id ...)
+     (syntax/loc stx
+       (begin
+         (define-pointwise-unary/binary f) ...))]))
+
+(define-pointwise-unary/binaries - /)
+
+(define (plus! A . BS)
+  (check-flmatrix 'plus! A)
+  (check-all-matrices-same-size 'plus! (cons A BS))
+  (let loop ([BS BS])
+    (cond
+      [(empty? BS)            A]
+      [(flmatrix? (first BS)) (flmatrix+! (first BS) A) (loop (rest BS))]
+      [(number?   (first BS)) (.+! A (first BS))       (loop (rest BS))]))
+  A)
+
+(define (plus A . BS)
+  (check-all-matrices-same-size 'plus (cons A BS))
+  (let loop ([A A] [BS BS])
+    (cond
+      [(empty? BS)            A]
+      [(flmatrix? (first BS)) (if (number? A)
+                                  (loop (.+ A        (first BS)) (rest BS))
+                                  (loop (flmatrix+ A (first BS)) (rest BS)))]
+      [(number?   (first BS))     (loop (.+        A (first BS)) (rest BS))])))
+
+(define (minus! A . BS)
+  (check-flmatrix 'minus! A)
+  (check-all-matrices-same-size 'minus! (cons A BS))
+  (cond
+    [(empty? BS) (.-! A)]
+    [else        (let loop ([BS BS])
+                   (cond
+                     [(empty? BS)            A]
+                     [(flmatrix? (first BS)) (flmatrix-! (first BS) A) (loop (rest BS))]
+                     [(number?   (first BS)) (.-! A (first BS))        (loop (rest BS))]))
+                 A]))
+
+(define (minus A . BS)
+  (check-all-matrices-same-size 'minus (cons A BS))
+  (cond
+    [(empty? BS) (.- A)]
+    [else        (let loop ([A A] [BS BS])
+                   (cond
+                     [(empty? BS)            A]
+                     [(flmatrix? (first BS)) (if (number? A)
+                                                 (loop (.- A        (first BS)) (rest BS))
+                                                 (loop (flmatrix- A (first BS)) (rest BS)))]
+                     [(number?   (first BS))     (loop (.-        A (first BS)) (rest BS))]))]))
+
+(define (times! A . BS)
+  (check-flmatrix 'times! A)
+  ; todo: check sizes
+  (let loop ([BS BS])
+    (cond
+      [(empty? BS)            A]
+      [(flmatrix? (first BS)) (flmatrix*! A (first BS) A) (loop (rest BS))]
+      [(number?   (first BS)) (.*! A (first BS))          (loop (rest BS))]))
+  A)
+
+(define (times A . BS)
+  ; todo: check sizes
+  (let loop ([A A] [BS BS])
+    (cond
+      [(empty? BS)            A]
+      [(flmatrix? (first BS)) (if (number? A)
+                                  (loop (.* A        (first BS)) (rest BS))
+                                  (loop (flmatrix* A (first BS)) (rest BS)))]
+      [(number?   (first BS)) (if (number? A)
+                                  (loop (*         A (first BS)) (rest BS))
+                                  (loop (.*        A (first BS)) (rest BS)))])))
+
+(define × times)
+
+(define (dot A B)
+  (flcolumn-dot A B))
+
+(define (outer A B)
+  ; compute outer product between first column of A and first row of B
+  (flmatrix-outer-product A B))
+
+(define (power A n)
+  ; n natural
+  (flmatrix-expt A n))
+
+(define (kron A B)
+  (define-param (m n   a lda) A)
+  (define-param (mb nb b ldb) B)
+  (define C (make-flmatrix (* m mb) (* n nb)))
+  (define-param (mc nc c ldc) C)
   
+  (for* ([i (in-range m)]
+         [j (in-range n)])
+    (define k (* i mb))
+    (define l (* j nb))
+    (define c_kl (ptr-elm c ldc k l))
+    (unsafe-matrix-copy! mb nb b lda c_kl ldc)
+    (define aij (unsafe-ref a lda i j))
+    (flmatrix-scale! aij (sub! C k l mb nb)))
+  C)
+
+
+(define (diag X [m? #f] [n? #f] [reciproc? #f])
+  (set! X (result-flcolumn X))
+  ; todo: use optional arguments to denote diagonal like matlab?
+  (define-param (m n) X)
+  (flmatrix-diagonal-from-singular-values (or m? m) (or n? m) X reciproc?))
+
+
+(define (cholesky A [triangle 'lower])
+  ; triangle is 'lower or 'upper
+  (define lower? (member triangle '(lower low l)))
+  (flmatrix-cholesky A (not lower?)))
+
+(define (svd A)                  (flmatrix-svd A))
+(define (qr A)                   (flmatrix-qr A))
+
+(define (eig A)
+  (define who 'eig)
+  (check-square who A)
+  (define-values (A0 WR WI VL VR info)
+    (flmatrix-eigenvalues-and-vectors! A #:right #t #:overwrite #f))
+  (values (real+imaginary->vector WR WI) VR))
+
+(define (eigvals A)
+  (define who 'eigvals)
+  (check-square who A)
+  (define-values (A0 WR WI VL VR info)
+    (flmatrix-eigenvalues-and-vectors! A #:right #f #:overwrite #f))
+  (real+imaginary->vector WR WI))
+
+(define (norm A)
+  (flmatrix-norm A))
+
+(define (det A)
+  (flmatrix-determinant A))
+
+(define (trace A)
+  (flmatrix-trace A))
+
+(define (rank A)
+  ; rank = dimension of column space = dimension of row space  
+  ;      = number of non-zero singular values
+  (flmatrix-rank A))
+
+; todo: condition number
+
+(define (mldivide A B)
+  ; todo: also handle non-square A
+  (flmatrix-solve-many A B))
+
+(define (mrdivide B A)
+  ; B/A = (A'\B')'
+  (transpose (mldivide (transpose A) (transpose B))))
+
+(define (inv A)
+  (flmatrix-inverse A))
+
+(define (pinv A)
+  (flmatrix-pseudo-inverse A))
+
 ;;;
 ;;; TEST
 ;;;
