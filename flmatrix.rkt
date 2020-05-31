@@ -54,6 +54,7 @@
           ffi/unsafe
           racket/syntax))
 
+
 ;;;
 ;;; LIBRARIES
 ;;;
@@ -1529,9 +1530,6 @@
   (define-param (m n) A)
   (define-values (U S VT) (flmatrix-svd A))
   (define Σ  (flmatrix-diagonal-from-singular-values m n S #t))
-  (displayln (map (λ (A) (flmatrix-dimensions A #t))
-                  (list (flmatrix-transpose VT) Σ (flmatrix-transpose U))))
-  (displayln (list (flmatrix-transpose VT) Σ (flmatrix-transpose U)))
   (define A+ (flmatrix* (flmatrix-transpose VT) (flmatrix* (transpose Σ) (flmatrix-transpose U))))
   A+)
 
