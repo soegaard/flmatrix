@@ -167,7 +167,8 @@ For comparision the same example with @racket[matrix] instead:
           (list A B)]
 
 In order to create a matrix of specific size with all zeros or all ones,
-use the functions @racket[zeros] and @racket[ones].
+use the functions @racket[zeros] and @racket[ones]. Use @racket[eye]
+to make matrix with ones on a diagonal.
 
 
 @bold[@racket[(zeros n)]]
@@ -182,11 +183,18 @@ use the functions @racket[zeros] and @racket[ones].
 @bold[@racket[(ones m n)]]
   create a mxn matrix with all ones
 
+@bold[@racket[(eye m n k)]]
+  create a mxn matrix with ones on the k'th diagonal
+
+The arguments @racket[n] and @racket[k] are optional for @racket[eye]
+and defaults to @racket[m] and @racket[0] respectively.
+
 @examples[#:eval quick-eval
           (zeros 2)
           (zeros 2 3)
           (ones 2)
-          (ones 2 3)]
+          (ones 2 3)
+          (list (eye 3) (eye 3 4) (eye 3 3 1) (eye 3 3 -1))]
 
 To create ranges of values use @racket[arange] or @racket[colarange] which both work like
 @racket[(matrix (range start stop step))], but avoids build an intermediary list.

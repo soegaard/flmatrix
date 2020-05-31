@@ -476,6 +476,8 @@
   (make-flmatrix m n 1.0))
 
 
+
+
 (define (list->flmatrix xss)
   (define m (length xss))
   (define n (apply max (map length xss)))
@@ -2460,6 +2462,20 @@
                (unsafe-set! a lda (- i k) i x*))])
   A)
 
+(define (flmatrix-eye m0 [n0 m0] [k 0])
+  (check-integer 'flmatrix-eye k)
+  ; create an mxn matrix with 1 on the k'th diagonal
+  (define A (make-flmatrix m0 n0 0.0))
+  (define-param (m n a lda) A)
+  (cond
+    [(= k 0) (for ([i (in-range m)])
+               (unsafe-set! a lda i i 1.0))]
+    [(> k 0) (for ([i (in-range (- m k))])
+               (unsafe-set! a lda i (+ i k) 1.0))]
+    [(< k 0) (for ([i (in-range (+ m k))])
+               (unsafe-set! a lda (- i k) i 1.0))])
+  A)
+
 (define (flmatrix-diagonal A [k 0])
   ; extract the k'th diagonal of the matrix A
   (check-flmatrix 'flmatrix-diagonal A)
@@ -3010,6 +3026,9 @@
 
 (define (pinv A)
   (flmatrix-pseudo-inverse A))
+
+(define (eye m [n m] [k 0])
+  (flmatrix-eye m n k))
 
 ;;;
 ;;; TEST
