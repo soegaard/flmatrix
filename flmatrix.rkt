@@ -1,7 +1,8 @@
 #lang racket
 (provide (all-defined-out))
 
-;;; TODO   
+;;; TODO
+;;;        * Implement block. Handle mix between numbers and matrices.
 ;;;        * Improve matrix-expt! (avoid allocation)
 
 ;;; NOTES
@@ -1130,6 +1131,19 @@
 ;;;
 ;;; BLOCK LEVEL OPERATIONS
 ;;;
+
+
+
+(define (calculate-row-height Xs)
+  ; Given a list of matrix-or-integer, calculate the row height.
+  ; #f means no common height
+  (define Ms (for/list ([X Xs] #:when (flmatrix? X)) X))
+  (cond [(empty? Ms) 1] ; no matrices in Xs => no height => default is 1
+        [else        (define hs (map flmatrix-m Ms))
+                     (if (apply = hs) (first hs) #f)]))
+
+  
+
 
 (define (flmatrix-augment C . Cs)
   ; 1. Check that all have same number of rows.
