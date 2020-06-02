@@ -129,18 +129,15 @@ and the columns are numbered @${0, \ldots, n-1}.
 The basic properties of an @racket[flmatrix] can be examined using these functions:
 
 @bold[@racket[(shape A)]]
-  return a list of with the number of rows and columns
-
+  return a list of with the number of rows and columns @linebreak[]
 @bold[@racket[(size A)]]
-  the number of elements in the matrix
-
+  the number of elements in the matrix                 @linebreak[]
 @bold[@racket[(nrows A)]]
-  the number of rows
-
+  the number of rows                                   @linebreak[]
 @bold[@racket[(ncols A)]]
-  the number of columns
+  the number of columns                                 
 
-@examples[#:eval quick-eval
+@examples[#:label #f #:eval quick-eval
           (define A (flmatrix: [[1 2 3]
                                 [4 5 5]]))
           (shape A)   ; dimensions 
@@ -166,11 +163,9 @@ has row-indices @${0, 1, \ldots, m-1} and column-indices @${0, 1, \ldots n-1}.
     \end{bmatrix}}
 
 @bold[@racket[(ref A i j)]]
-   the element in @A with index @${(i,j)}
-
+   the element in @A with index @${(i,j)}  @linebreak[]
 @bold[@racket[(row A i)]]
-   the @ith row of @A
-
+   the @ith row of @A                      @linebreak[]
 @bold[@racket[(col A j)]]
    the @jth column of @A
 
@@ -209,7 +204,7 @@ The function @racket[matrix] also accepts @racket[f64vectors] as input.
           (matrix (f64vector 1 2 3))]
 
 After conversion the created @racket[flmatrix] will contain a pointer to
-piece newly allocated memory containing the floating point numbers.
+a newly allocated piece of memory containing the floating point numbers.
 If you happen to work with data in the form of @racket[f64vector]s, then
 you can avoid the allocation, if you use @racket[matrix!] instead.
 If the same @racket[f64vector] is used to create two matrices with @racket[matrix!]
@@ -227,7 +222,7 @@ will affect the other.
           (list A B)
           (mset! A 0 0 42)
           (list A B)]
-For comparision the same example with @racket[matrix] instead:
+For comparision the same example with @racket[matrix]:
 @examples[#:label #f #:eval quick-eval
           (define v (f64vector 1 2 3))
           (define A (matrix v))
@@ -242,19 +237,15 @@ to make matrix with ones on a diagonal.
 
 
 @bold[@racket[(zeros n)]]
-  create a square @nxn matrix with all zeros
-
+  create a square @nxn matrix with all zeros   @linebreak[]
 @bold[@racket[(zeros m n)]]
-  create a @mxn matrix with all zeros
-
+  create a @mxn matrix with all zeros          @linebreak[] 
 @bold[@racket[(ones n)]]
-  create a square @nxn matrix with all ones
-
+  create a square @nxn matrix with all ones    @linebreak[]
 @bold[@racket[(ones m n)]]
-  create a @mxn matrix with all ones
-
+  create a @mxn matrix with all ones           @linebreak[]
 @bold[@racket[(eye m n k)]]
-  create a @mxn matrix with ones on the @kth diagonal
+  create a @mxn matrix with ones on the @kth diagonal 
 
 The arguments @n and @k are optional for @racket[eye]
 and defaults to @m and @${0} respectively.
@@ -273,13 +264,11 @@ The vector created has length @racket[(ceiling (/ (- stop start) step))].
 
 @bold[@racket[(arange start stop step)]]
   create a row vector with values from start to stop (exclusively),
-  here step is the gap between values
-
+  here step is the gap between values     @linebreak[]
 @bold[@racket[(arange start stop)]]
-  like @racket[(arange start stop 1.0)]
-
+  like @racket[(arange start stop 1.0)]   @linebreak[]
 @bold[@racket[(arange stop)]]
-  like @racket[(arange 0.0 stop 1.0)]
+  like @racket[(arange 0.0 stop 1.0)]     @linebreak[]
 
 @bold[@racket[(colarange start stop step)]] @linebreak[]
 @bold[@racket[(colarange start stop)]]      @linebreak[]
@@ -327,10 +316,22 @@ allow you to provide an exact endpoint.
 @subsection{Elementwise Operations}
 
 Elementwise operations (also called @emph{pointwise} operations) work on each element.
-The operations are named with a beginning point. Beside the elementwise versions
-of the standard arithmetic operations, the standard numerical functions also
-has an elementwise counterpart. Binary operators work both on matrices (of the same side)
+The operations are named with a beginning point.
+Besides the elementwise versions of the standard arithmetic operations, 
+the standard numerical functions also have elementwise counterparts.
+Binary operators work both on matrices (of the same side)
 and on a number and matrix.
+
+Formally for a function @${f} of one or two arguments, the corresponding pointwise
+function @${.f} satisfy: 
+
+@$${.f( \begin{bmatrix} a_{ij} \end{bmatrix})
+     = \begin{bmatrix} f(a_{ij}) \end{bmatrix}
+    \textrm{ or  }  
+    .f( \begin{bmatrix} a_{ij} \end{bmatrix},
+       \begin{bmatrix} b_{ij} \end{bmatrix})
+     = \begin{bmatrix} f(a_{ij},b_{ij}) \end{bmatrix}}
+
 
 @bold[@racket[(.+ A B)]]                            @linebreak[]
 @bold[@racket[(.- A B)]] and @bold[@racket[(.- A)]] @linebreak[]
