@@ -2,7 +2,7 @@
 
 This repo has been deprecated in favor of
 
-   https://github.com/soegaard/sci/flomat
+    https://github.com/soegaard/sci/tree/master/flomat
 
 See docs:
 
